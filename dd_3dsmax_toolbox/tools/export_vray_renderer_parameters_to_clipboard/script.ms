@@ -1,12 +1,23 @@
-fn VRayRendererToClipboard =
+fn getparentfolder _f =
+(
+    for i = _f.count to 1 by -1 do
+    (
+        if _f[i] == "\\" do
+        (
+            _f = substring _f 1 (i-1)
+            exit
+        )
+    )
+    _f
+)
+
+fn vrayrendererparameterstoclipboard =
 (
 	renderSceneDialog.commit()
-	currentdir = getFilenamePath ( getThisScriptFilename() )
-	fileIn (currentdir + @"\ExportParametersToString_V01.ms")
+	lib_dir = getparentfolder( trimRight ( getFilenamePath ( getThisScriptFilename() ) ) "\\/" ) + "\\lib\\"
+	fileIn (lib_dir + "parmstostring.ms")
 
-	render_camera = "/obj/cam1"
-	render_camera = getActiveCamera()
-	if render_camera != undefined do render_camera = "/obj/" + tolower(render_camera.name)
+	if getActiveCamera() != undefined then render_camera = "/obj/" + toLower( render_camera.name ) else render_camera = "/obj/cam1"
 
 	fn trange = if rendTimeType == 1 then 0 else 1
 
@@ -30,9 +41,14 @@ fn VRayRendererToClipboard =
 	script += "render_camera,'" + render_camera + "'\n"
 	script += "render_network_environment,'/out/env'\n"
 	script += "render_network_render_channels,'/out/render_elements'\n"
-	script += ExportParametersToString renderers.current
+	script += parmstostring( renderers.current )
 
 	setclipboardText script
+	print( "Render parameters successfully exported to clipboard" )
 )
 
-VRayRendererToClipboard()
+if findstring( ( classof renderers.current ) as string ) "V_Ray" != undefined then
+    vrayrendererparameterstoclipboard()
+else
+    messageBox( "Current renderer is not VRay" )
+

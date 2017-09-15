@@ -6,8 +6,11 @@ with correct z-order behaviour concerning its sibling windows.
 
 import ctypes
 
-from PySide import QtGui
-from PySide import QtCore
+try:
+	from PySide import QtCore, QtGui
+except ImportError:
+    from Qt import QtCore, QtGui
+
 import MaxPlus
 
 GWL_HWNDPARENT = -8
@@ -29,57 +32,6 @@ class MaxWidget(QtGui.QWidget):
         app = QtGui.QApplication.instance()
         self._focus_filter = FocusFilter()
         self.event_filter = app.installEventFilter(self._focus_filter)
-        self.resize(310, 210)
-        self.setStyleSheet("""
-            QWidget {
-                font-family: MS Shell Dlg 2;
-            }
-        
-            QListView {
-                outline: none;
-                show-decoration-selected: 1; /* make the selection span the entire width of the view */
-            }
-            
-            QListView::item {              
-                margin-left: 0px;
-                border: 1px solid rgba(0, 0, 0, 0);
-            }
-            
-            QListView::item:alternate {
-                background: #EEEEEE;
-            }
-            
-            QListView::item:selected {
-                color: white;
-                border: 1px solid rgba(255, 165, 0, 200);
-            }
-            
-            QListView::item:selected:!active {                
-                background: rgba(255, 165, 0, 32);                
-            }
-            
-            QListView::item:selected:active {
-                background: rgba(255, 165, 0, 32);                
-            }
-            
-            QListView::item:hover {
-                background: rgba(255, 165, 0, 0);                
-            }
-            
-            QLineEdit
-            {    
-                background: rgba(25, 25, 25, 255);
-                padding: 0px;
-                margin-left: 1px;
-                margin-right: -2px;
-                border-style: none;
-                font-size: 12px;
-                selection-color: black;
-                selection-background-color: rgba(255, 165, 0, 200);
-            }
-            """
-        )
-        #print(self.font().family())
 
     def get_hwnd(self):
         """Get the HWND window handle from this QtWidget."""

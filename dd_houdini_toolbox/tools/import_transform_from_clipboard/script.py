@@ -28,3 +28,5 @@ if len(selectedNodes) != 0:
             print('transform values imported with: ' + str(error_count) + ' errors')
         else:
             print('all transform values successfully imported')
+else:
+    print('nothing selected')

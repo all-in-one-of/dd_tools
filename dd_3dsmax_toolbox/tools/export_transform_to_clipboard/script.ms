@@ -24,7 +24,14 @@ fn transformtoclipboard o =
 	script += "sz," + roundfloat( _s.z ) as string + "\n"
 
 	setclipboardText script
+	print( "Object transform successfully exported to clipboard" )
 )
 
-if selection.count == 1 do
+
+if selection.count == 1 then
 	transformtoclipboard $
+else
+    if selection.count == 0 then
+        messageBox("Nothing to export")
+    else
+        messageBox("More then one object selected")

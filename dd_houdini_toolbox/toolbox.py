@@ -9,9 +9,6 @@ try:
 except ImportError:
     from Qt import QtWidgets, QtCore, QtGui
 
-'''
-from Qt import QtWidgets, QtCore, QtGui
-'''
 
 class DeselectableListWidget(QtWidgets.QListWidget):
     def mousePressEvent(self, event):
@@ -31,6 +28,46 @@ class Toolbox(QtWidgets.QWidget):
 
         #self.setParent(hou.ui.mainQtWindow(), QtCore.Qt.Window)
         self.setWindowTitle("Toolbox")
+        self.resize(310, 210)
+        self.setStyleSheet("""
+            QWidget {
+                font-family: MS Shell Dlg 2;
+            }
+            QListView {
+                outline: none;                        
+                show-decoration-selected: 1; /* make the selection span the entire width of the view */
+            }
+            QListView::item {              
+                margin-left: 0px;
+                border: 1px solid rgba(0, 0, 0, 0);
+            }
+            QListView::item:alternate {
+                background: #EEEEEE;
+            }
+            QListView::item:selected {
+                color: white;
+                border: 1px solid rgba(255, 165, 0, 200);
+            }            
+            QListView::item:selected:!active {                
+                background: rgba(255, 165, 0, 32);                
+            }            
+            QListView::item:selected:active {
+                background: rgba(255, 165, 0, 32);                
+            }            
+            QListView::item:hover {
+                background: rgba(255, 165, 0, 0);                
+            }
+            QLineEdit {    
+                background: rgba(25, 25, 25, 255);
+                padding: 0px;
+                margin-left: 1px;
+                margin-right: -2px;
+                border-style: none;
+                font-size: 12px;
+                selection-color: black;
+                selection-background-color: rgba(255, 165, 0, 200);
+            }"""
+        )
 
         #get current tools folder
         filename = inspect.getframeinfo(inspect.currentframe()).filename
@@ -66,9 +103,8 @@ class Toolbox(QtWidgets.QWidget):
         if tmplist != self.currentlist:
             self.update()
 
-
     def editScript(self):
-        #execute selected tool
+        #execute editScript tool
         item = self.listWidget.currentItem()
         py_file = self.path + item.data(QtCore.Qt.UserRole) + '\\script.py'
         subprocess.Popen(['C:/Program Files/JetBrains/PyCharm Community Edition 2017.1.4/bin/pycharm64.exe', py_file])
@@ -79,7 +115,7 @@ class Toolbox(QtWidgets.QWidget):
         os.startfile(self.path + name)
 
     def editDescription(self):
-        #execute selected tool
+        #execute editDescription tool
         item = self.listWidget.currentItem()
         description_file = self.path + item.data(QtCore.Qt.UserRole) + '\\description'
         proc = subprocess.Popen(['notepad.exe', description_file])
@@ -88,17 +124,18 @@ class Toolbox(QtWidgets.QWidget):
             data = "".join(line.rstrip() for line in file_content)
             item.setToolTip(data)
 
-
     def editIcon(self):
-        #execute selected tool
+        #execute editIcon tool
         item = self.listWidget.currentItem()
         icon_file = self.path + item.data(QtCore.Qt.UserRole) + '\\icon.svg'
         proc = subprocess.Popen(['C:/Program Files/Inkscape/inkscape.exe', icon_file])
         proc.wait()
-        qIcon = QtGui.QIcon(icon_file)
+        qIcon = QtGui.QIcon()
+        qIcon.addPixmap(icon_file, QtGui.QIcon.Normal)
+        qIcon.addPixmap(icon_file, QtGui.QIcon.Selected)
         item.setIcon(qIcon)
 
-    def openScene(self, item):
+    def executeScript(self, item):
         #execute selected tool
         py_file = self.path + item.data(QtCore.Qt.UserRole) + '\\script.py'
         execfile(py_file)
@@ -112,13 +149,12 @@ class Toolbox(QtWidgets.QWidget):
                 self.currentlist.append(file.title())
                 item = QtWidgets.QListWidgetItem(file.title().replace("_", " "), self.listWidget)
                 item.setData(QtCore.Qt.UserRole, file)
-                # item.setSizeHint(QtCore.QSize(0, 26))
-                # item.setText(filename.title().replace("_"," "))
-                # self.listWidget.addItem(item)
 
                 icon_file = self.path + file + '\\icon.svg'
                 if (os.path.isfile(icon_file)):
-                    qIcon = QtGui.QIcon(icon_file)
+                    qIcon = QtGui.QIcon()
+                    qIcon.addPixmap(icon_file, QtGui.QIcon.Normal)
+                    qIcon.addPixmap(icon_file, QtGui.QIcon.Selected)
                     item.setIcon(qIcon)
 
                 description_file = self.path + file + '\\description'
@@ -156,19 +192,16 @@ class Toolbox(QtWidgets.QWidget):
             menu.show()
 
     def rename(self):
-        # execute selected tool
+        # execute rename tool
         item = self.listWidget.currentItem()
         self.listWidget.editItem(item)
 
     def duplicate(self):
-        # execute selected tool
+        # execute duplicate tool
         item = self.listWidget.currentItem()
         newitem = QtWidgets.QListWidgetItem(item.text() + ' (Copy)', self.listWidget)
         oldname = item.data(QtCore.Qt.UserRole).replace(" ", "_").lower()
         newname = newitem.text().replace(" ", "_").lower()
-        #newitem.setData(QtCore.Qt.UserRole, newname)
-        #newitem.setIcon(item.icon())
-        #self.listWidget.setCurrentItem(newitem)
         try:
             shutil.copytree(os.path.join(self.path, oldname), os.path.join(self.path, newname))
         except:
@@ -194,7 +227,6 @@ class Toolbox(QtWidgets.QWidget):
 
     def nameChanged(self, item):
         item.setText(item.text().title().replace("_", " "))
-        #item = self.listWidget.currentItem()
         oldname = item.data(QtCore.Qt.UserRole).replace(" ", "_").lower()
         newname = item.text().replace(" ", "_").lower()
         item.setData(QtCore.Qt.UserRole, newname)
@@ -209,7 +241,7 @@ class Toolbox(QtWidgets.QWidget):
 
         #connect list items to function
         #self.listWidget.doubleClicked.connect(self.editScript)
-        self.listWidget.clicked.connect(self.openScene)
+        self.listWidget.clicked.connect(self.executeScript)
 
         self.listWidget.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
         self.listWidget.customContextMenuRequested.connect(self.contextMenuEvent)

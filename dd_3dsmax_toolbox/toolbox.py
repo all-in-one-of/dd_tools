@@ -1,26 +1,18 @@
 import inspect
 import os
-#import hou
 import subprocess
 import shutil
+import MaxPlus
+import maxparenting
 
-'''
-try:
-    from PyQt5 import QtWidgets, QtCore, QtGui
-except ImportError:
-    from Qt import QtWidgets, QtCore, QtGui
-'''
-'''
-from Qt import QtWidgets, QtCore, QtGui
-'''
+reload(maxparenting)
 
 try:
 	from PySide import QtCore, QtGui
 except ImportError:
     from Qt import QtCore, QtGui
 
-import maxparenting
-reload(maxparenting)
+
 
 class DeselectableListWidget(QtGui.QListWidget):
     def mousePressEvent(self, event):
@@ -40,6 +32,46 @@ class Toolbox(maxparenting.MaxWidget):
 
         #self.setParent(hou.ui.mainQtWindow(), QtCore.Qt.Window)
         self.setWindowTitle("Toolbox")
+        self.resize(310, 210)
+        self.setStyleSheet("""
+            QWidget {
+                font-family: MS Shell Dlg 2;
+            }
+            QListView {
+                outline: none;                        
+                show-decoration-selected: 1; /* make the selection span the entire width of the view */
+            }
+            QListView::item {              
+                margin-left: 0px;
+                border: 1px solid rgba(0, 0, 0, 0);
+            }
+            QListView::item:alternate {
+                background: #EEEEEE;
+            }
+            QListView::item:selected {
+                color: white;
+                border: 1px solid rgba(255, 165, 0, 200);
+            }            
+            QListView::item:selected:!active {                
+                background: rgba(255, 165, 0, 32);                
+            }            
+            QListView::item:selected:active {
+                background: rgba(255, 165, 0, 32);                
+            }            
+            QListView::item:hover {
+                background: rgba(255, 165, 0, 0);                
+            }
+            QLineEdit {    
+                background: rgba(25, 25, 25, 255);
+                padding: 0px;
+                margin-left: 1px;
+                margin-right: -2px;
+                border-style: none;
+                font-size: 12px;
+                selection-color: black;
+                selection-background-color: rgba(255, 165, 0, 200);
+            }"""
+        )
 
         #get current tools folder
         filename = inspect.getframeinfo(inspect.currentframe()).filename
@@ -75,9 +107,8 @@ class Toolbox(maxparenting.MaxWidget):
         if tmplist != self.currentlist:
             self.update()
 
-
     def editScript(self):
-        #execute selected tool
+        #execute editScript tool
         item = self.listWidget.currentItem()
         ms_file = self.path + item.data(QtCore.Qt.UserRole) + '\\script.ms'
         subprocess.Popen(['C:/Program Files/JetBrains/PyCharm Community Edition 2017.1.4/bin/pycharm64.exe', ms_file])
@@ -88,7 +119,7 @@ class Toolbox(maxparenting.MaxWidget):
         os.startfile(self.path + name)
 
     def editDescription(self):
-        #execute selected tool
+        #execute editDescription tool
         item = self.listWidget.currentItem()
         description_file = self.path + item.data(QtCore.Qt.UserRole) + '\\description'
         proc = subprocess.Popen(['notepad.exe', description_file])
@@ -98,7 +129,7 @@ class Toolbox(maxparenting.MaxWidget):
             item.setToolTip(data)
 
     def editIcon(self):
-        #execute selected tool
+        #execute editIcon tool
         item = self.listWidget.currentItem()
         icon_file = self.path + item.data(QtCore.Qt.UserRole) + '\\icon.svg'
         proc = subprocess.Popen(['C:/Program Files/Inkscape/inkscape.exe', icon_file])
@@ -108,10 +139,10 @@ class Toolbox(maxparenting.MaxWidget):
         qIcon.addPixmap(icon_file, QtGui.QIcon.Selected)
         item.setIcon(qIcon)
 
-    def openScene(self, item):
-        #execute selected tool
+    def executeScript(self, item):
+        #execute executeScript tool
         ms_file = self.path + item.data(QtCore.Qt.UserRole) + '\\script.ms'
-        execfile(ms_file)
+        MaxPlus.Core.EvalMAXScript('fileIn(@\"{0}\")'.format(ms_file))
 
     def update(self):
         self.currentlist = list()
@@ -122,9 +153,6 @@ class Toolbox(maxparenting.MaxWidget):
                 self.currentlist.append(file.title())
                 item = QtGui.QListWidgetItem(file.title().replace("_", " "), self.listWidget)
                 item.setData(QtCore.Qt.UserRole, file)
-                # item.setSizeHint(QtCore.QSize(0, 26))
-                # item.setText(filename.title().replace("_"," "))
-                # self.listWidget.addItem(item)
 
                 icon_file = self.path + file + '\\icon.svg'
                 if (os.path.isfile(icon_file)):
@@ -168,7 +196,7 @@ class Toolbox(maxparenting.MaxWidget):
             menu.show()
 
     def rename(self):
-        # execute selected tool
+        # execute rename tool
         item = self.listWidget.currentItem()
         self.listWidget.editItem(item)
 
@@ -188,7 +216,7 @@ class Toolbox(maxparenting.MaxWidget):
         self.update()
 
     def delete(self):
-        # execute selected tool
+        # execute delete tool
         item = self.listWidget.currentItem()
         name = item.text().replace(" ", "_").lower()
         try:
@@ -206,7 +234,6 @@ class Toolbox(maxparenting.MaxWidget):
 		
     def nameChanged(self, item):
         item.setText(item.text().title().replace("_", " "))
-        #item = self.listWidget.currentItem()
         oldname = item.data(QtCore.Qt.UserRole).replace(" ", "_").lower()
         newname = item.text().replace(" ", "_").lower()
         item.setData(QtCore.Qt.UserRole, newname)
@@ -221,7 +248,7 @@ class Toolbox(maxparenting.MaxWidget):
 
         #connect list items to function
         #self.listWidget.doubleClicked.connect(self.editScript)
-        self.listWidget.clicked.connect(self.openScene)
+        self.listWidget.clicked.connect(self.executeScript)
 
         self.listWidget.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
         self.listWidget.customContextMenuRequested.connect(self.contextMenuEvent)
