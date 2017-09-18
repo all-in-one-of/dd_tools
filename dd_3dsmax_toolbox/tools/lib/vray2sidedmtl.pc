@@ -1,0 +1,14 @@
+#VRayNodeMtl2Sided
+
+fn color_type_convert val = return val / 255.
+fn divideByOneHundred_convert val = return val / 100.
+
+Translucency.r>translucencyr/Float:color_type_convert
+Translucency.g>translucencyg/Float:color_type_convert
+Translucency.b>translucencyb/Float:color_type_convert
+texmap_translucency_multiplier>translucency_tex_mult/Float:divideByOneHundred_convert
+mult_by_front_diffuse>mult_by_front_diffuse/Boolean
+force1SidedSubMtls>force_1sided/Boolean
+frontMtl>front/Material
+backMtl>back/Material
+texmap_translucency>translucency_tex/TexMap

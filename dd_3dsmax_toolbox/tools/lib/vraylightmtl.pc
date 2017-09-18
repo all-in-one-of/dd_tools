@@ -1,0 +1,25 @@
+#VRayNodeBRDFLight
+
+fn color_type_convert val = return val / 255.
+fn divideByOneHundred_convert val = return val / 100.
+
+color.a>colora/Float:color_type_convert
+color.r>colorr/Float:color_type_convert
+color.g>colorg/Float:color_type_convert
+color.b>colorb/Float:color_type_convert
+multiplier>colorMultiplier/Float:divideByOneHundred_convert
+texmap>color/TexMap
+!texmap_on>None
+twoSided>doubleSided/Boolean
+compensate_exposure>compensateExposure/Boolean
+opacity_multiplyColor>multiplyByOpacity/Boolean
+opacity_texmap>transparency/TexMap
+!opacity_texmap_on>None
+!directLight_on>None
+!directLight_subdivs>None
+!directLight_cutoffThreshold>None
+!displacement_multiplier>None
+!displacement_texmap>None
+!displacement_texmap_on>None
+!texmap_resolution>None
+!texmap_adaptiveness>None

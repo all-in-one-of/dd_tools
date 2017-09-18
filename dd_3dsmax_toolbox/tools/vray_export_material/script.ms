@@ -1,29 +1,28 @@
-/*fn getsmeselectedmaterials =
-(
-	viewNode = sme.GetView (sme.activeView)
-	smeSelMats = #()
-	for n = 1 to trackViewNodes[#sme][(sme.activeView)].numSubs do (
-		m = trackViewNodes[#sme][(sme.activeView)][n].reference 
-		b = viewNode.GetNodeByRef m
-		if b.selected and superclassof m == material do append smeSelMats m
-	)
-	smeSelMats
-)*/
-
 fn upperfirst s = ((toUpper s[1]) + (substring s 2 s.count))
+
+fn getparentfolder _f =
+(
+    for i = _f.count to 1 by -1 do
+    (
+        if _f[i] == "\\" do
+        (
+            _f = substring _f 1 (i-1)
+            exit
+        )
+    )
+    _f
+)
 
 fn exportselectednodeparameters n =
 (
 	global glob_n
 	glob_n = n
-	pc_dir = getFilenamePath ( getThisScriptFilename() )
-
+	lib_dir = getparentfolder( trimRight ( getFilenamePath ( getThisScriptFilename() ) ) "\\/" ) + "\\lib\\"
 	if n != undefined then
 	(
 		if findstring ((classof n) as string) "VRay" != undefined or findstring ((classof n) as string) "V_Ray" != undefined then
 		(
-			pc_fname = pc_dir + "\\" + tolower((classOf n) as string) + ".pc"
-			print(pc_fname)
+			pc_fname = lib_dir + "\\" + tolower((classOf n) as string) + ".pc"
 			if doesfileexist pc_fname then
 			(
 				_name = ""
@@ -84,5 +83,4 @@ fn exportselectednodeparameters n =
 )
 
 if selection.count == 1 do
-    --exportselectednodeparameters (getsmeselectedmaterials())[1]
     exportselectednodeparameters $.material

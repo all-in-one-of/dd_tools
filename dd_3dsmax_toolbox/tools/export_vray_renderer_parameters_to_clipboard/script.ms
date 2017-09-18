@@ -24,7 +24,7 @@ fn vrayrendererparameterstoclipboard =
 	--hou.parm('/out/vray_renderer/f1').deleteAllKeyframes()
 	--hou.parm('/out/vray_renderer/f2').deleteAllKeyframes()
 
-	script = ""
+	script = "#vray_renderer\n"
 	script += "trange," + (trange()) as string + "\n"
 
 	if rendTimeType == 2 then
@@ -47,7 +47,7 @@ fn vrayrendererparameterstoclipboard =
 	print( "Render parameters successfully exported to clipboard" )
 )
 
-if findstring( ( classof renderers.current ) as string ) "V_Ray" != undefined then
+if findstring( ( classOf renderers.current ) as string ) "V_Ray" != undefined then
     vrayrendererparameterstoclipboard()
 else
     messageBox( "Current renderer is not VRay" )

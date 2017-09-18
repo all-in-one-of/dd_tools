@@ -7,7 +7,7 @@ fn transformtoclipboard o =
 	_r = _t.rotation as eulerangles
 	_p = _t.position
 	_s = _t.scale
-	script = ""
+	script = "#copytransform\n"
 	--position
 	script += "tx," + ( _p.x / 100. ) as string + "\n"
 	script += "ty," + ( _p.y  / 100. ) as string + "\n"

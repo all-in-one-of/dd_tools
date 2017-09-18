@@ -10,9 +10,10 @@ except ImportError:
     from Qt import QtWidgets, QtCore, QtGui
 
 
-class DeselectableListWidget(QtWidgets.QListWidget):
+class CustomListWidget(QtWidgets.QListWidget):
     def mousePressEvent(self, event):
         self.clearSelection()
+        self.mouseButton = event.button()
         QtWidgets.QListWidget.mousePressEvent(self, event)
 
 class Toolbox(QtWidgets.QWidget):
@@ -74,7 +75,7 @@ class Toolbox(QtWidgets.QWidget):
         self.path = os.path.dirname(os.path.abspath(filename)) + '\\tools\\'
 
         #create widgets
-        self.listWidget = DeselectableListWidget() #QtWidgets.QListWidget()
+        self.listWidget = CustomListWidget() #QtWidgets.QListWidget()
         #self.listWidget.setIconSize(QtCore.QSize(18, 18))
         self.button = QtWidgets.QPushButton('Refresh')
 
@@ -137,8 +138,9 @@ class Toolbox(QtWidgets.QWidget):
 
     def executeScript(self, item):
         #execute selected tool
-        py_file = self.path + item.data(QtCore.Qt.UserRole) + '\\script.py'
-        execfile(py_file)
+        if self.listWidget.mouseButton == QtCore.Qt.MouseButton.LeftButton:
+            py_file = self.path + item.data(QtCore.Qt.UserRole) + '\\script.py'
+            execfile(py_file)
 
     def update(self):
         self.currentlist = list()

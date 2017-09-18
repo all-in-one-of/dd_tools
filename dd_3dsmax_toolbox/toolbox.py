@@ -14,9 +14,10 @@ except ImportError:
 
 
 
-class DeselectableListWidget(QtGui.QListWidget):
+class CustomListWidget(QtGui.QListWidget):
     def mousePressEvent(self, event):
         self.clearSelection()
+        self.mouseButton = event.button()
         QtGui.QListWidget.mousePressEvent(self, event)
 
 class Toolbox(maxparenting.MaxWidget):
@@ -78,7 +79,7 @@ class Toolbox(maxparenting.MaxWidget):
         self.path = os.path.dirname(os.path.abspath(filename)) + '\\tools\\'
 
         #create widgets
-        self.listWidget = DeselectableListWidget() #QtWidgets.QListWidget()
+        self.listWidget = CustomListWidget() #QtWidgets.QListWidget()
         #self.listWidget.setIconSize(QtCore.QSize(18, 18))
         self.button = QtGui.QPushButton('Refresh')
 
@@ -140,9 +141,10 @@ class Toolbox(maxparenting.MaxWidget):
         item.setIcon(qIcon)
 
     def executeScript(self, item):
-        #execute executeScript tool
-        ms_file = self.path + item.data(QtCore.Qt.UserRole) + '\\script.ms'
-        MaxPlus.Core.EvalMAXScript('fileIn(@\"{0}\")'.format(ms_file))
+        # execute executeScript tool
+        if self.listWidget.mouseButton == QtCore.Qt.MouseButton.LeftButton:
+            ms_file = self.path + item.data(QtCore.Qt.UserRole) + '\\script.ms'
+            MaxPlus.Core.EvalMAXScript('fileIn(@\"{0}\")'.format(ms_file))
 
     def update(self):
         self.currentlist = list()
