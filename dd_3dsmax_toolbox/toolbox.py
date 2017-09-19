@@ -20,6 +20,11 @@ class CustomListWidget(QtGui.QListWidget):
         self.mouseButton = event.button()
         QtGui.QListWidget.mousePressEvent(self, event)
 
+    def edit(self, index, trigger, event):
+        if trigger == QtGui.QAbstractItemView.DoubleClicked:
+            return False
+        return QtGui.QListWidget.edit(self, index, trigger, event)
+
 class Toolbox(maxparenting.MaxWidget):
 
     def __init__(self, parent=None):

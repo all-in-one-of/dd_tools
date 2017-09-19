@@ -16,6 +16,11 @@ class CustomListWidget(QtWidgets.QListWidget):
         self.mouseButton = event.button()
         QtWidgets.QListWidget.mousePressEvent(self, event)
 
+    def edit(self, index, trigger, event):
+        if trigger == QtWidgets.QAbstractItemView.DoubleClicked:
+            return False
+        return QtWidgets.QListWidget.edit(self, index, trigger, event)
+
 class Toolbox(QtWidgets.QWidget):
 
     def __init__(self, parent=None):
@@ -29,7 +34,7 @@ class Toolbox(QtWidgets.QWidget):
 
         #self.setParent(hou.ui.mainQtWindow(), QtCore.Qt.Window)
         self.setWindowTitle("Toolbox")
-        self.resize(310, 210)
+        self.resize(310, 260)
         self.setStyleSheet("""
             QWidget {
                 font-family: MS Shell Dlg 2;
