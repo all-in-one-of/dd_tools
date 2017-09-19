@@ -38,9 +38,9 @@ if vrayRopNode != None:
                 else:
                     print('all renderer parameters successfully imported')
             else:
-                print('cannot apply clipboad values, wrong type! error:0')
+                print('cannot apply clipboad values, wrong type!')
         else:
-            print('cannot apply clipboad values, wrong type! error:1')
+            print('cannot apply clipboad values, wrong type!')
     else:
         print('nothing to import')
 else:
