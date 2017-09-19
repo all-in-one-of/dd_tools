@@ -2,7 +2,7 @@
 
 fn divideByOneHundred_convert val = return val / 100.
 
-@brdf_count/Integer:10
+[10]>brdf_count/Integer
 
 baseMtl>brdf_1/Material
 additiveMode>additive_mode/Boolean

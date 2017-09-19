@@ -1,3 +1,5 @@
+#VRayNodeBRDFVRayMtl
+
 fn brdf_type_convert val=if val == 4 then return 3 else return val
 fn color_type_convert val=return val / 255.
 fn preservationMode_convert val=if val == 0 then return 1 else return 0

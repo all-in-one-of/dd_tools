@@ -1,3 +1,5 @@
+#VRayNodeBRDFSkinComplex
+
 fn color_type_convert val = return val / 255.
 
 scale>scale/Float

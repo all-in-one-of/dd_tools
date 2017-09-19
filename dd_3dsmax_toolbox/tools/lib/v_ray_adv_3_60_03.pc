@@ -1,3 +1,5 @@
+#vray_renderer
+
 fn color_type_convert val = return val / 255.
 fn interpolationType_convert val = return 2 --houdini default value
 fn filename_convert val = return "" --ne returne aucune valeur pour le moment
