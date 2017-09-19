@@ -1,0 +1,1 @@
+Write parameters from selection to file (Light or camera if selected, geometry material if selected, material or texmap in SME if selected else vray renderer if nothing selected)
