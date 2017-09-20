@@ -61,7 +61,7 @@ if fname != '':
                     parm_val = ls[1]
 
                     if parm_val.startswith('\'') and parm_val.endswith('\''):
-                        parm_val = parm_val[1:-2]
+                        parm_val = parm_val[1:-1]
                     else:
                         parm_val = eval(parm_val)
 
