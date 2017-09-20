@@ -33,16 +33,19 @@ fn objectIsAnimated _o =
 )
 */
 
-fn exportObject _o animated:false step:1 substeps:1 =
+
+
+fn exportObject _o _s animated:false step:1 substeps:1 =
 (	
 	if isvalidnode _o == true do
 	if superclassof _o == GeometryClass do
 	(
-		tmpabcfile = sysinfo.tempdir + "tmp_abc"
+	    _name = toLower( substituteString ( substituteString _o.name " " "_" ) "." "_" )
+		_abcfile = sysinfo.tempdir + _name + ".abc"
 		frange = [0,100]
 		opath = getHierarchy _o			
 		if animated == false then frange = [currenttime.frame, currenttime.frame] else frange = [animationrange.start.frame, animationrange.end.frame]
-		jobString = "filename=" + tmpabcfile
+		jobString = "filename=" + _abcfile
 		jobString += ";in=" + (frange[1] as string)
 		jobString += ";out=" + (frange[2] as string)
 		jobString += ";step=" + (step as string)
@@ -68,31 +71,29 @@ fn exportObject _o animated:false step:1 substeps:1 =
 			messageBox "Failure - See Maxscript Listener for details." title:"Exocortex Alembic Export"
 		)else
 		(
-			script = "#abc_export\n"
-			script += "filename=" + tmpabcfile + "\n"
-			script += "name=" + toLower( substituteString _o.name " " "_" ) + "\n"
-			script += "object_id=" + _o.gbufferChannel  as string + "\n"
-			script += "wirecolor=(" + ( _o.wirecolor.r / 255. ) as string + "," + ( _o.wirecolor.g/ 255. ) as string + "," + ( _o.wirecolor.b / 255. ) as string + ")\n"
-			script += "handle=" + _o.inode.handle as string "\n"
-			setclipboardText script
-		)		
+			_s += "name," + _name + "\n"
+			_s += "object_id," + _o.gbufferChannel  as string + "\n"
+			_s += "wirecolor,(" + ( _o.wirecolor.r / 255. ) as string + "," + ( _o.wirecolor.g/ 255. ) as string + "," + ( _o.wirecolor.b / 255. ) as string + ")\n"
+			_s += "handle," + _o.inode.handle as string + "\n"
+			_s += "filename," + _abcfile + "\n\n"
+		)
 	)
+	_s
 )
 
 
-if selection.count == 1 then
+if selection.count > 0 then
 (
-    _o = selection[1]
-    if superClassOf _o == GeometryClass then
+    _s = "#abc_export\n\n"
+    for _o in selection do
     (
-        animated = ( _o.isAnimated or isDeformable _o )
-        exportObject _o animated:animated step:1 substeps:1
+        if superClassOf _o == GeometryClass and classOf _o != Targetobject then
+        (
+            animated = ( _o.isAnimated or isDeformable _o )
+            _s = exportObject _o _s animated:animated step:1 substeps:1
+        )
+        else print(_o.name +  "is not geometry" )
     )
-    else
-        messageBox( "Select geometry" )
+    setclipboardText _s
 )
-else
-    if selection.count == 0 then
-        messageBox( "Nothing selected" )
-    else
-        messageBox( "Too much objects selected" )
+else messageBox( "Nothing selected" )
