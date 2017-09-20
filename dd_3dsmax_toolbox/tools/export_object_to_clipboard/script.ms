@@ -70,7 +70,7 @@ fn exportObject _o animated:false step:1 substeps:1 =
 		(
 			script = "#abc_export\n"
 			script += "filename=" + tmpabcfile + "\n"
-			script += "name=" + _o.name + "\n"
+			script += "name=" + toLower( substituteString _o.name " " "_" ) + "\n"
 			script += "object_id=" + _o.gbufferChannel  as string + "\n"
 			script += "wirecolor=(" + ( _o.wirecolor.r / 255. ) as string + "," + ( _o.wirecolor.g/ 255. ) as string + "," + ( _o.wirecolor.b / 255. ) as string + ")\n"
 			script += "handle=" + _o.inode.handle as string "\n"
