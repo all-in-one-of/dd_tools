@@ -36,7 +36,16 @@ lines = text.splitlines()
 
 #error_count = 0
 
-if lines[0] == '#abc_export':
+if lines[0].startswith('#abc_export'):
+    ls = lines[0].split(',', 2)
+    fps = ls[1]
+    range = ls[2]
+
+    if fps != str(hou.fps()):
+        print('warning: fps differs from export')
+    if range != str(hou.playbar.timelineRange()):
+        print('warning: animation range differs from export')
+
     geo_dir = hou.expandString('$HIP') + '/geo/'
 
     if not os.path.exists(geo_dir):

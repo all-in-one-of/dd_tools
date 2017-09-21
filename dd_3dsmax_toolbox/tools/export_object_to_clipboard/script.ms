@@ -63,6 +63,7 @@ fn exportObject _o _s animated:false step:1 substeps:1 =
 		jobString += ";validateMeshTopology=false"
 		jobString += ";renameConflictingNodes=false"
 		jobString += ";mergePolyMeshSubtree=true"
+		jobString += ";particlesystemtomeshconversion=true"
 		--jobString += ";dynamictopology=true"
 		jobString += ";storageFormat=hdf5"
 		result = ExocortexAlembic.createExportJobs( jobString )
@@ -84,16 +85,17 @@ fn exportObject _o _s animated:false step:1 substeps:1 =
 
 if selection.count > 0 then
 (
-    _s = "#abc_export\n\n"
+    _script = "#abc_export,"  + ( framerate as float ) as string + ",[" + ( animationrange.start.frame as integer ) as string + ", " + ( animationrange.end.frame as integer ) as string + "]\n\n"
+
     for _o in selection do
     (
         if superClassOf _o == GeometryClass and classOf _o != Targetobject then
         (
             animated = ( _o.isAnimated or isDeformable _o )
-            _s = exportObject _o _s animated:animated step:1 substeps:1
+            _script = exportObject _o _script animated:animated step:1 substeps:1
         )
         else print(_o.name +  "is not geometry" )
     )
-    setclipboardText _s
+    setclipboardText _script
 )
 else messageBox( "Nothing selected" )
