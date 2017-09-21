@@ -77,6 +77,7 @@ def createCameraTarget(parent, camera):
     _camera_target.parm('controltype').set(2)
     _camera_target.setColor(hou.Color(0.298039, 0.54902, 0.74902))
     _camera_target.setUserData('nodeshape', 'circle')
+    _camera_target.setDisplayFlag(False)
     _camera_target.moveToGoodPosition()
 
     addTargetNodeController(camera, _camera_target)
@@ -128,12 +129,21 @@ def importCameraFromClipboard():
     camera_name = ''
     camera_type = ''
     camera_target = None
-
+    is_tuple = False
     clipboard = QtWidgets.QApplication.clipboard()
     text = clipboard.text()
     lines = text.splitlines()
 
-    if lines[0] == '#camera_export':
+    if lines[0].startswith('#camera_export'):
+        ls = lines[0].split(',',2)
+        fps = ls[1]
+        range = ls[2]
+
+        if fps != str(hou.fps()):
+            print('warning: fps differs from export')
+        if range != str(hou.playbar.timelineRange()):
+            print('warning: animation range differs from export')
+
         for line in lines[1:]:
             ls = line.split(',', 1)
             if len(ls) == 2:
@@ -143,7 +153,9 @@ def importCameraFromClipboard():
                     parm_val = parm_val[1:-1]
                 else:
                     parm_val = eval(parm_val)
-                if parm_name == '#name':
+
+                is_tuple = isinstance(parm_val, tuple)
+                if parm_name == 'name':
                     camera_name = parm_val
                     camera = obj.node(camera_name)
                     if camera == None:
@@ -152,24 +164,42 @@ def importCameraFromClipboard():
                         camera.moveToGoodPosition()
                     else:
                         for p in (camera.parms()):
+                            p.deleteAllKeyframes()
                             p.revertToDefaults()
 
-                elif parm_name == '#type':
+                        camera.parm('constraints_on').set(1)
+                        camera.parm('constraints_path').set('constraints')
+
+                elif parm_name == 'type':
                     camera_type = parm_val
                     if camera_type == 'target':
                         camera_target = obj.node(camera_name + '_target')
                         if camera_target == None:
                             camera_target = createCameraTarget(obj, camera)
+                        else:
+                            for p in (camera_target.parms()):
+                                p.deleteAllKeyframes()
 
-                elif line.startswith('#targ'):
-                    camera_target.parm(parm_name[5:]).set(parm_val)
-
-                elif line.startswith('#'):
-                    camera.parm(parm_name[1:]).set(parm_val)
+                elif line.startswith('target_'):
+                    if is_tuple:
+                        for k in parm_val:
+                            setKey = hou.Keyframe()
+                            setKey.setFrame(k[0])
+                            setKey.setValue(k[1])
+                            camera_target.parm(parm_name[7:]).setKeyframe(setKey)
+                    else:
+                        camera_target.parm(parm_name[7:]).set(parm_val)
 
                 else:
                     try:
-                        camera.parm(parm_name).set(parm_val)
+                        if is_tuple:
+                            for k in parm_val:
+                                setKey = hou.Keyframe()
+                                setKey.setFrame(k[0])
+                                setKey.setValue(k[1])
+                                camera.parm(parm_name).setKeyframe(setKey)
+                        else:
+                            camera.parm(parm_name).set(parm_val)
                     except:
                         print('cannot setting parameter: ' + parm_name)
 

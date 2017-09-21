@@ -1,60 +1,133 @@
 fn upperfirst _s = ((toUpper _s[1]) + (substring _s 2 _s.count))
---fn roundfloat v = ( v as string ) as float --( ( v as string ) as integer64 ) as float
+
 fn maxtohoudinicameratransform _t =  ( preRotateX ( matrix3 [1,0,0] [0,0,1] [0,-1,0] [0,0,0] ) -90 ) * _t * inverse( matrix3 [1,0,0] [0,0,1] [0,-1,0] [0,0,0] )
+
 fn maxtohoudinitransform _t = ( matrix3 [1,0,0] [0,0,1] [0,-1,0] [0,0,0] ) * _t * inverse( matrix3 [1,0,0] [0,0,1] [0,-1,0] [0,0,0] )
+
+fn maxtohoudinigetcameratransforms _o _step:1 _substeps:1 =
+(
+    _result = #()
+    for _t = animationrange.start.frame to animationrange.end.frame by _step / _substeps do
+    (
+        append _result #( _t, ( maxtohoudinicameratransform ( at time _t _o.transform ) ) )
+    )
+    _result
+)
+
+fn maxtohoudinigettransforms _o _step:1 _substeps:1 =
+(
+    _result = #()
+    for _t = animationrange.start.frame to animationrange.end.frame by _step / _substeps do
+    (
+        append _result #( _t, ( maxtohoudinitransform ( at time _t _o.transform ) ) )
+    )
+    _result
+)
+
+fn getanimatedvalues _controller _step:1 _substeps:1 _scale:1 =
+(
+    _result = #()
+    for _t = animationrange.start.frame to animationrange.end.frame by _step / _substeps do
+    (
+        append _result #( _t, ( at time _t _controller.value  ) * _scale )
+    )
+    _result
+)
+
+fn isAnimatedTuple _tuple =
+(
+    _firstVal = _tuple[1][2]
+    _isAnimated = false
+    if _tuple.count > 1 do
+    for i = 2 to _tuple.count do (
+        --convert as string is needed for comparing two array values (maxscript issue...)
+        if _tuple[i][2] as string != _firstVal as string do (
+            _isAnimated = true
+            exit
+        )
+    )
+    _isAnimated
+)
+
+fn formatTuple _tuple =
+(
+    _result = ""
+    if ( isAnimatedTuple _tuple ) then (
+        _result = "("
+        for i in _tuple do _result += trimLeft( i as string ) "#" + ","
+        _result = trimRight _result ","
+        _result += ")"
+    )else (
+        _result = _tuple[1][2] as string
+    )
+    _result
+)
 
 fn exportcameratoclipboard _o =
 (
-    _t = maxtohoudinicameratransform _o.transform
-    _r = _t.rotation as eulerangles
-    _p = _t.position / 100.
-    _s = _t.scale
+    _t = maxtohoudinigetcameratransforms _o
 
-    _script = "#camera_export\n\n"
+    _p_x = for i in _t collect ( #( i[1], i[2].position.x / 100. ) )
+    _p_y = for i in _t collect ( #( i[1], i[2].position.y / 100. ) )
+    _p_z = for i in _t collect ( #( i[1], i[2].position.z / 100. ) )
+
+    _r_x = for i in _t collect ( #( i[1], ( i[2].rotation as eulerangles ).x ) )
+    _r_y = for i in _t collect ( #( i[1], ( i[2].rotation as eulerangles ).y ) )
+    _r_z = for i in _t collect ( #( i[1], ( i[2].rotation as eulerangles ).z ) )
+
+    _s_x = for i in _t collect ( #( i[1], i[2].scale.x ) )
+    _s_y = for i in _t collect ( #( i[1], i[2].scale.y ) )
+    _s_z = for i in _t collect ( #( i[1], i[2].scale.z ) )
+
+    _script = "#camera_export," + ( framerate as float ) as string + ",[" + ( animationrange.start.frame as integer ) as string + ", " + ( animationrange.end.frame as integer ) as string + "]\n\n"
 
     --name
-    _script += "#name,'" + toLower(_o.name) + "'\n"
+    _script += "name,'" + toLower(_o.name) + "'\n"
 
     --type
-    _script += "#type,'" + substituteString (toLower((classOf _o) as string)) "camera" "" + "'\n"
+    _script += "type,'" + substituteString (toLower((classOf _o) as string)) "camera" "" + "'\n"
 
     --if target
     if classOf _o == Targetcamera do
     (
-        _t_t = maxtohoudinitransform _o.target.transform
-        _t_p = _t_t.position / 100.
+        _t_t = maxtohoudinigettransforms _o.target
+        _t_p_x = for i in _t_t collect ( #( i[1], i[2].position.x / 100. ) )
+        _t_p_y = for i in _t_t collect ( #( i[1], i[2].position.y / 100. ) )
+        _t_p_z = for i in _t_t collect ( #( i[1], i[2].position.z / 100. ) )
 
-        _script += "#targtx," + _t_p.x as string + "\n"
-        _script += "#targty," + _t_p.y as string + "\n"
-        _script += "#targtz," + _t_p.z as string + "\n"
+        _script += "target_tx," + formatTuple _t_p_x  + "\n"
+        _script += "target_ty," + formatTuple _t_p_y  + "\n"
+        _script += "target_tz," + formatTuple _t_p_z  + "\n"
     )
 
     --position
-    _script += "#tx," + _p.x as string + "\n"
-    _script += "#ty," + _p.y as string + "\n"
-    _script += "#tz," + _p.z as string + "\n"
+    _script += "tx," + formatTuple _p_x + "\n"
+    _script += "ty," + formatTuple _p_y + "\n"
+    _script += "tz," + formatTuple _p_z + "\n"
 
     --rotation
-    if classof _o != Targetcamera then (
-        _script += "#rx," + _r.x as string + "\n"
-        _script += "#ry," + _r.y as string + "\n"
-        _script += "#rz," + _r.z as string + "\n"
+    if classOf _o != Targetcamera then (
+        _script += "rx," + formatTuple _r_x + "\n"
+        _script += "ry," + formatTuple _r_y + "\n"
+        _script += "rz," + formatTuple _r_z + "\n"
     )else (
         --only roll angle
-        _script += "#rz," + _r.z as string + "\n"
+        _script += "rz," + formatTuple _r_z + "\n"
     )
 
     --scale
-    _script += "#sx," + _s.x as string + "\n"
-    _script += "#sy," + _s.y as string + "\n"
-    _script += "#sz," + _s.z as string + "\n\n"
+    _script += "sx," + formatTuple _s_x + "\n"
+    _script += "sy," + formatTuple _s_y + "\n"
+    _script += "sz," + formatTuple _s_z + "\n"
 
     --parameters
-    _lens = 0.5 * (GetRendApertureWidth() / tan(_o.fov/2.0))
-    _script += "focal," + _lens as string + "\n"
 
-    fn getProjection _o = if _o.orthoProjection then return 1 else return 0
-    _script += "projection," + (getProjection _o) as string + "\n"
+    _fov = getanimatedvalues _o.fov.controller
+    _lens = for i in _fov collect ( #( i[1], 0.5 * ( GetRendApertureWidth() / tan( i[2]/2.0 ) ) ) )
+
+    _script += "focal," + formatTuple _lens + "\n"
+
+    _script += "projection," + ( if _o.orthoProjection then 1 else 0 ) as string + "\n"
 
     _script += "aperture," + (getRendApertureWidth()) as string + "\n"
     _script += "resx," + renderWidth as string + "\n"
@@ -66,7 +139,8 @@ fn exportcameratoclipboard _o =
         _script += "far," + _o.farrange as string + "\n"
     )
 
-    _script += "focus," + _o.target_distance as string + "\n"
+    if _o.targetDistance.controller != undefined do
+        _script += "focus," + formatTuple ( getanimatedvalues _o.targetDistance.controller _scale:0.01 ) + "\n"
 
     setclipboardText _script
     print( "Camera successfully exported to clipboard" )
