@@ -5,11 +5,8 @@ try:
 except ImportError:
     from Qt import QtWidgets, QtCore, QtGui
 
-obj = hou.node('/obj')
-camera_name = ''
-camera_type = ''
-camera = None
-camera_target = None
+global addTargetNodeController, createCameraTarget
+
 
 def addTargetNodeController(camera, camera_target):
     constraints = camera.createNode('chopnet', 'constraints')
@@ -56,43 +53,44 @@ def addTargetNodeController(camera, camera_target):
     constraintlookat.setInput(1, constraintobject)
     constraints.layoutChildren()
 
-def createCameraTarget(parent, camera, camera_name):
-    camera_target = parent.createNode('null', camera_name + '_target')
 
-    parm_group = camera_target.parmTemplateGroup()
+def createCameraTarget(parent, camera):
+    _camera_target = parent.createNode('null', camera.name() + '_target')
+
+    parm_group = _camera_target.parmTemplateGroup()
     parm_group.insertBefore(parm_group.findFolder("Transform"), hou.StringParmTemplate('camera', 'Camera', 1,
-                                                      string_type=hou.stringParmType.NodeReference))
-    camera_target.setParmTemplateGroup(parm_group)
-    camera_target.parm('camera').set(camera.path())
+                                                                                       string_type=hou.stringParmType.NodeReference))
+    _camera_target.setParmTemplateGroup(parm_group)
+    _camera_target.parm('camera').set(camera.path())
 
     parm_group = camera.parmTemplateGroup()
     parm_group.insertBefore(parm_group.findFolder("Transform"),
                             hou.StringParmTemplate('target', 'Target', 1,
                                                    string_type=hou.stringParmType.NodeReference))
     camera.setParmTemplateGroup(parm_group)
-    camera.parm('target').set(camera_target.path())
+    camera.parm('target').set(_camera_target.path())
 
-    camera_target.parm('dcolorr').set(0)
-    camera_target.parm('dcolorg').set(0)
-    camera_target.parm('dcolorb').set(0.5)
-    camera_target.parm('geoscale').set(0.2)
-    camera_target.parm('controltype').set(2)
-    camera_target.setColor(hou.Color(0.298039,0.54902,0.74902))
-    camera_target.setUserData('nodeshape', 'circle')
-    camera_target.moveToGoodPosition()
+    _camera_target.parm('dcolorr').set(0)
+    _camera_target.parm('dcolorg').set(0)
+    _camera_target.parm('dcolorb').set(0.5)
+    _camera_target.parm('geoscale').set(0.2)
+    _camera_target.parm('controltype').set(2)
+    _camera_target.setColor(hou.Color(0.298039, 0.54902, 0.74902))
+    _camera_target.setUserData('nodeshape', 'circle')
+    _camera_target.moveToGoodPosition()
 
-    addTargetNodeController(camera, camera_target)
+    addTargetNodeController(camera, _camera_target)
 
     camera.node('constraints').node('lookat').parm('twist').setExpression('ch("../../rz")')
     camera.parm('focus').setExpression(
-        'distance(ch("tx"), ch("ty"), ch("tz"), ch("../' + camera_name + '_target/tx"), ch("../' + camera_name + '_target/ty"), ch("../' + camera_name + '_target/tz"))')
+        'distance(ch("tx"), ch("ty"), ch("tz"), ch("../' + camera.name() + '_target/tx"), ch("../' + camera.name() + '_target/ty"), ch("../' + camera.name() + '_target/tz"))')
 
     points = camera.createNode('add', 'points')
     points.parm('points').set(2)
     points.parm('usept0').set(1)
     points.parm('usept1').set(1)
     points.parm('pt1z').setExpression(
-        '-distance(ch("../../' + camera_name + '_target/tx"), ch("../../' + camera_name + '_target/ty"), ch("../../' + camera_name + '_target/tz"), ch("../tx"), ch("../ty"), ch("../tz"))')
+        '-distance(ch("../../' + camera.name() + '_target/tx"), ch("../../' + camera.name() + '_target/ty"), ch("../../' + camera.name() + '_target/tz"), ch("../tx"), ch("../ty"), ch("../tz"))')
 
     line = points.createOutputNode('add', 'line')
     line.parm('prim0').set('0-1')
@@ -113,61 +111,70 @@ def createCameraTarget(parent, camera, camera_name):
 
     merge.setNextInput(color2)
     merge.setDisplayFlag(True)
-    #merge.setRenderFlag(True)
+    # merge.setRenderFlag(True)
 
     null = camera.createNode('null')
     null.setRenderFlag(True)
     null.moveToGoodPosition()
 
     camera.layoutChildren()
-    #camera.setDeleteScript('print("camera deleted")', language=hou.scriptLanguage.Python)
+    # camera.setDeleteScript('print("camera deleted")', language=hou.scriptLanguage.Python)
+    return _camera_target
 
-    return camera_target
 
+def importCameraFromClipboard():
+    obj = hou.node('/obj')
+    camera = None
+    camera_name = ''
+    camera_type = ''
+    camera_target = None
 
-clipboard = QtWidgets.QApplication.clipboard()
-text = clipboard.text()
-lines = text.splitlines()
+    clipboard = QtWidgets.QApplication.clipboard()
+    text = clipboard.text()
+    lines = text.splitlines()
 
-if lines[0] == '#camera_export':
-    for line in lines[1:]:
-        ls = line.split(',', 1)
-        if len(ls) == 2:
-            parm_name = ls[0]
-            parm_val = ls[1]
-            if parm_val.startswith('\'') and parm_val.endswith('\''):
-                parm_val = parm_val[1:-1]
-            else:
-                parm_val = eval(parm_val)
-            if parm_name == '#name':
-                camera_name = parm_val
-                camera = obj.node(camera_name)
-                if camera == None:
-                    camera = obj.createNode('cam')
-                    camera.setName(camera_name)
-                    camera.moveToGoodPosition()
+    if lines[0] == '#camera_export':
+        for line in lines[1:]:
+            ls = line.split(',', 1)
+            if len(ls) == 2:
+                parm_name = ls[0]
+                parm_val = ls[1]
+                if parm_val.startswith('\'') and parm_val.endswith('\''):
+                    parm_val = parm_val[1:-1]
                 else:
-                    for p in (camera.parms()):
-                        p.revertToDefaults()
+                    parm_val = eval(parm_val)
+                if parm_name == '#name':
+                    camera_name = parm_val
+                    camera = obj.node(camera_name)
+                    if camera == None:
+                        camera = obj.createNode('cam')
+                        camera.setName(camera_name)
+                        camera.moveToGoodPosition()
+                    else:
+                        for p in (camera.parms()):
+                            p.revertToDefaults()
 
-            elif parm_name == '#type':
-                camera_type = parm_val
-                if camera_type == 'target':
-                    camera_target = obj.node( camera_name + '_target' )
-                    if camera_target == None:
-                        camera_target = createCameraTarget(obj, camera, camera_name)
+                elif parm_name == '#type':
+                    camera_type = parm_val
+                    if camera_type == 'target':
+                        camera_target = obj.node(camera_name + '_target')
+                        if camera_target == None:
+                            camera_target = createCameraTarget(obj, camera)
 
-            elif line.startswith('#targ'):
-                camera_target.parm(parm_name[5:]).set(parm_val)
+                elif line.startswith('#targ'):
+                    camera_target.parm(parm_name[5:]).set(parm_val)
 
-            elif line.startswith('#'):
-                camera.parm(parm_name[1:]).set(parm_val)
+                elif line.startswith('#'):
+                    camera.parm(parm_name[1:]).set(parm_val)
 
-            else:
-                try:
-                    camera.parm( parm_name ).set( parm_val )
-                except:
-                    print( 'cannot setting parameter: ' + parm_name )
+                else:
+                    try:
+                        camera.parm(parm_name).set(parm_val)
+                    except:
+                        print('cannot setting parameter: ' + parm_name)
 
-else:
-    print('cannot apply clipboad values, wrong type!')
+    else:
+        print('cannot apply clipboad values, wrong type!')
+
+
+importCameraFromClipboard()
