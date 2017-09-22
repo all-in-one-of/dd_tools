@@ -34,13 +34,18 @@ class Toolbox(QtWidgets.QWidget):
 
         #self.setParent(hou.ui.mainQtWindow(), QtCore.Qt.Window)
         self.setWindowTitle("Toolbox")
-        self.resize(310, 260)
+        self.resize(310, 325)
         self.setStyleSheet("""
             QWidget {
                 font-family: MS Shell Dlg 2;
             }
+            QLabel {
+                background: rgba(48, 48, 48, 255);
+                padding: 2px 2px 5px 2px;
+            }
             QListView {
-                outline: none;                        
+                outline: none;
+                border: none;
                 show-decoration-selected: 1; /* make the selection span the entire width of the view */
             }
             QListView::item {              
@@ -82,7 +87,11 @@ class Toolbox(QtWidgets.QWidget):
         #create widgets
         self.listWidget = CustomListWidget() #QtWidgets.QListWidget()
         #self.listWidget.setIconSize(QtCore.QSize(18, 18))
-        self.button = QtWidgets.QPushButton('Refresh')
+        #self.button = QtWidgets.QPushButton('Refresh')
+
+        self.banner = QtWidgets.QLabel()
+        self.banner.setPixmap(QtGui.QPixmap(os.path.dirname(os.path.abspath(filename)) + '\\header.png'))
+
 
         #force interface creation
         self.createInterface()
@@ -94,6 +103,7 @@ class Toolbox(QtWidgets.QWidget):
 
         #add widgets to layout
         #mainLayout.addWidget(self.button)
+        mainLayout.addWidget(self.banner)
         mainLayout.addWidget(self.listWidget)
 
         self.setLayout(mainLayout)
@@ -255,7 +265,7 @@ class Toolbox(QtWidgets.QWidget):
         self.listWidget.itemChanged.connect(self.nameChanged)
 
         #connect refresh button
-        self.button.clicked.connect(self.update)
+        #self.button.clicked.connect(self.update)
 
 def run():
     window = Toolbox()
