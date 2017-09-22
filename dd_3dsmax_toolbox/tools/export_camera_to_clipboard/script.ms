@@ -24,12 +24,19 @@ fn maxtohoudinigettransforms _o _step:1 _substeps:1 =
     _result
 )
 
-fn getanimatedvalues _controller _step:1 _substeps:1 _scale:1 =
+fn getpropertyvalues _o _name _step:1 _substeps:1 _scale:1 =
 (
+    _controller = getPropertyController _o _name
+    _property = getProperty _o _name
+
     _result = #()
-    for _t = animationrange.start.frame to animationrange.end.frame by _step / _substeps do
-    (
-        append _result #( _t, ( at time _t _controller.value  ) * _scale )
+    if isController _controller then (
+        for _t = animationrange.start.frame to animationrange.end.frame by _step / _substeps do (
+            append _result #( _t, ( at time _t _controller.value  ) * _scale )
+        )
+    )
+    else (
+        append _result #( 0, _property * _scale )
     )
     _result
 )
@@ -112,7 +119,8 @@ fn exportcameratoclipboard _o =
         _script += "rz," + formatTuple _r_z + "\n"
     )else (
         --only roll angle
-        _script += "rz," + formatTuple _r_z + "\n"
+        _roll = getpropertyvalues _o.controller "roll_angle"
+        _script += "rz," + formatTuple _roll + "\n"
     )
 
     --scale
@@ -121,8 +129,7 @@ fn exportcameratoclipboard _o =
     _script += "sz," + formatTuple _s_z + "\n"
 
     --parameters
-
-    _fov = getanimatedvalues _o.fov.controller
+    _fov = getpropertyvalues _o "fov"
     _lens = for i in _fov collect ( #( i[1], 0.5 * ( GetRendApertureWidth() / tan( i[2]/2.0 ) ) ) )
 
     _script += "focal," + formatTuple _lens + "\n"
@@ -140,7 +147,7 @@ fn exportcameratoclipboard _o =
     )
 
     if _o.targetDistance.controller != undefined do
-        _script += "focus," + formatTuple ( getanimatedvalues _o.targetDistance.controller _scale:0.01 ) + "\n"
+        _script += "focus," + formatTuple ( getpropertyvalues _o "targetDistance" _scale:0.01 ) + "\n"
 
     setclipboardText _script
     print( "Camera successfully exported to clipboard" )
