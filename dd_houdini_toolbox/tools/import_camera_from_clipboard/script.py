@@ -77,7 +77,7 @@ def createCameraTarget(parent, camera):
     _camera_target.parm('controltype').set(2)
     _camera_target.setColor(hou.Color(0.298039, 0.54902, 0.74902))
     _camera_target.setUserData('nodeshape', 'circle')
-    _camera_target.setDisplayFlag(False)
+    #_camera_target.setDisplayFlag(False)
     _camera_target.moveToGoodPosition()
 
     addTargetNodeController(camera, _camera_target)
