@@ -58,15 +58,15 @@ class Toolbox(QtWidgets.QWidget):
             QListView::item:selected {
                 color: white;
                 border: 1px solid rgba(255, 165, 0, 200);
-            }            
-            QListView::item:selected:!active {                
-                background: rgba(255, 165, 0, 32);                
+            }
+            QListView::item:selected:!active {
+                background: rgba(255, 165, 0, 32);
             }            
             QListView::item:selected:active {
-                background: rgba(255, 165, 0, 32);                
+                background: rgba(255, 165, 0, 32);
             }            
             QListView::item:hover {
-                background: rgba(255, 165, 0, 0);                
+                background: rgba(255, 255, 255, 16);        
             }
             QLineEdit {    
                 background: rgba(25, 25, 25, 255);
