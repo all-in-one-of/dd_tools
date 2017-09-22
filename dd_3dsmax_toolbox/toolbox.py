@@ -70,7 +70,7 @@ class Toolbox(maxparenting.MaxWidget):
                 background: rgba(255, 165, 0, 32);                
             }            
             QListView::item:hover {
-                background: rgba(255, 165, 0, 0);                
+                background: rgba(255, 255, 255, 16);
             }
             QLineEdit {    
                 background: rgba(25, 25, 25, 255);
