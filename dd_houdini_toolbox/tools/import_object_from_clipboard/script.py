@@ -114,6 +114,8 @@ if lines[0].startswith('#abc_export'):
                 else:
                     print( 'cannot import ' + name + ', cannot access temporary .abc file' )
 
+    print('object(s) sucessfully imported')
+
     addSceneWirecolorVisualizer()
 
 else:
