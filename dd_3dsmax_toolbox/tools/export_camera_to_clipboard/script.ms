@@ -95,7 +95,7 @@ fn exportcameratoclipboard _o =
     _script += "type,'" + substituteString (toLower((classOf _o) as string)) "camera" "" + "'\n"
 
     --if target
-    if classOf _o == Targetcamera do
+    if _o.target != undefined do
     (
         _t_t = maxtohoudinigettransforms _o.target
         _t_p_x = for i in _t_t collect ( #( i[1], i[2].position.x / 100. ) )
@@ -129,7 +129,7 @@ fn exportcameratoclipboard _o =
     _script += "tz," + formatTuple _p_z + "\n"
 
     --rotation
-    if classOf _o != Targetcamera then (
+    if _o.target == undefined then (
         _script += "rx," + formatTuple _r_x + "\n"
         _script += "ry," + formatTuple _r_y + "\n"
         _script += "rz," + formatTuple _r_z + "\n"

@@ -282,6 +282,8 @@ def importCameraFromClipboard():
     text = clipboard.text()
     lines = text.splitlines()
 
+    error_count = 0
+
     if lines[0].startswith('#camera_export'):
         ls = lines[0].split(',',2)
         fps = ls[1]
@@ -350,6 +352,12 @@ def importCameraFromClipboard():
                             camera.parm(parm_name).set(parm_val)
                     except:
                         print('cannot setting parameter: ' + parm_name)
+                        error_count += 1
+
+        if error_count == 0:
+            print('light successfully imported')
+        else:
+            print('light imported with ' + str(error_count) + " errors")
 
     else:
         print('cannot apply clipboad values, wrong type!')
