@@ -96,7 +96,7 @@ fn exportselectednodeparameters n =
                 close file -- closes the file
 
                 setclipboardText script
-	            print( "Material successfully exported to clipboard" )
+	            print( "Material/Texmap successfully exported to clipboard" )
 
 			)else (messagebox "Conversion file not found for this node type!")
 		)else (messagebox "This node is not a VRay type!")
