@@ -102,9 +102,25 @@ fn exportcameratoclipboard _o =
         _t_p_y = for i in _t_t collect ( #( i[1], i[2].position.y / 100. ) )
         _t_p_z = for i in _t_t collect ( #( i[1], i[2].position.z / 100. ) )
 
+        _t_r_x = for i in _t_t collect ( #( i[1], ( i[2].rotation as eulerangles ).x ) )
+        _t_r_y = for i in _t_t collect ( #( i[1], ( i[2].rotation as eulerangles ).y ) )
+        _t_r_z = for i in _t_t collect ( #( i[1], ( i[2].rotation as eulerangles ).z ) )
+
+        _t_s_x = for i in _t_t collect ( #( i[1], i[2].scale.x ) )
+        _t_s_y = for i in _t_t collect ( #( i[1], i[2].scale.y ) )
+        _t_s_z = for i in _t_t collect ( #( i[1], i[2].scale.z ) )
+
         _script += "target_tx," + formatTuple _t_p_x  + "\n"
         _script += "target_ty," + formatTuple _t_p_y  + "\n"
         _script += "target_tz," + formatTuple _t_p_z  + "\n"
+
+        _script += "target_rx," + formatTuple _t_r_x  + "\n"
+        _script += "target_ry," + formatTuple _t_r_y  + "\n"
+        _script += "target_rz," + formatTuple _t_r_z  + "\n"
+
+        _script += "target_sx," + formatTuple _t_s_x  + "\n"
+        _script += "target_sy," + formatTuple _t_s_y  + "\n"
+        _script += "target_sz," + formatTuple _t_s_z  + "\n"
     )
 
     --position
@@ -142,12 +158,12 @@ fn exportcameratoclipboard _o =
     _script += "aspect," + renderPixelAspect as string + "\n"
 
     if _o.clipManually do (
-        _script += "near," + _o.nearrange as string + "\n"
-        _script += "far," + _o.farrange as string + "\n"
+        _script += "near," + formatTuple( getpropertyvalues _o "nearclip" _scale:0.01 ) + "\n" --_o.nearrange
+        _script += "far," + formatTuple( getpropertyvalues _o "farclip" _scale:0.01 ) + "\n" --_o.farrange
     )
 
     if _o.targetDistance.controller != undefined do
-        _script += "focus," + formatTuple ( getpropertyvalues _o "targetDistance" _scale:0.01 ) + "\n"
+        _script += "focus," + formatTuple( getpropertyvalues _o "targetDistance" _scale:0.01 ) + "\n"
 
     setclipboardText _script
     print( "Camera successfully exported to clipboard" )
