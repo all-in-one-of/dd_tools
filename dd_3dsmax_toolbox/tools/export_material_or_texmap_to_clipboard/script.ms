@@ -33,31 +33,33 @@ fn exportselectednodeparameters n =
 (
 	global glob_n
 	glob_n = n
-	lib_dir = getparentfolder( trimRight ( getFilenamePath ( getThisScriptFilename() ) ) "\\/" ) + "\\lib\\"
+	lib_dir = getparentfolder( trimRight ( getfilenamePath ( getThisScriptfilename() ) ) "\\/" ) + "\\lib\\"
 	if n != undefined then
 	(
-		if findstring ((classof n) as string) "VRay" != undefined or findstring ((classof n) as string) "V_Ray" != undefined then
+		if findstring ((classOf n) as string) "VRay" != undefined or findstring ((classOf n) as string) "V_Ray" != undefined then
 		(
 			pc_fname = lib_dir + "\\" + tolower((classOf n) as string) + ".pc"
-			if doesfileexist pc_fname then
+			if doesFileExist pc_fname then
 			(
 			    _type = ""
 
 				_name = ""
-				try(_name = "_" + n.name)catch()
+				try(_name = n.name)catch()
 				_name = substituteString _name " - " "_"
 				_name = substituteString _name " " "_"
 				_name = substituteString _name "-" "_"
+                --_name = toLower( _name )
 
-                file = openFile pc_fname
-                script = ""
-                while not eof file do
+                _file = openfile pc_fname
+                _script = "#parm_export\n\n"
+                while not eof _file do
                 (
-                    _r =  readLine file --read the first line and store as a string it in _r
+                    _r =  readLine _file --read the first line and store as a string it in _r
                     if substring _r 1 1 == "#" then
                     (
                         _type = substring _r 2 -1
-                        script += "#" + _type + "\n"
+                        _script += "type,'" + _type + "'\n"
+                        _script += "name,'" + _name + "'\n"
                     )
                     else if substring _r 1 3 == "fn " then
                         execute _r
@@ -89,24 +91,31 @@ fn exportselectednodeparameters n =
                         if type == "String" do
                             parmval = "'" + parmval + "'"
 
-                        script += parmto + "," + parmval + "\n"
+                        _script += parmto + "," + parmval + "\n"
                     )
                 )
-                seek file 0    -- reset position to beginning
-                close file -- closes the file
+                seek _file 0    -- reset position to beginning
+                close _file -- closes the _file
 
-                setclipboardText script
+                setclipboardText _script
 	            print( "Material/Texmap successfully exported to clipboard" )
 
-			)else (messagebox "Conversion file not found for this node type!")
-		)else (messagebox "This node is not a VRay type!")
-	)else (messagebox "Nothing to export!")
+			)else (messageBox "Conversion file not found for this node type!")
+		)else (messageBox "This node is not a VRay type!")
+	)else (messageBox "Nothing to export!")
 )
 
+_o = undefined
 _sme = getsmeselectednode()
 
 if _sme.count == 1 then
-    exportselectednodeparameters _sme[1]
+    _o = _sme[1]
+else if selection.count == 1 then
+    if selection[1].material != undefined do
+        _o = selection[1].material
+
+if _o != undefined then
+    exportselectednodeparameters _o
 else
     if _sme.count == 0 then
         messageBox("Nothing to export")
