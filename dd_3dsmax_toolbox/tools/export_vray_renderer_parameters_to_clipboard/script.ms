@@ -17,15 +17,11 @@ fn vrayrendererparameterstoclipboard =
 	lib_dir = getparentfolder( trimRight ( getFilenamePath ( getThisScriptFilename() ) ) "\\/" ) + "\\lib\\"
 	fileIn (lib_dir + "parmstostring.ms")
 
-	if getActiveCamera() != undefined then render_camera = "/obj/" + toLower( render_camera.name ) else render_camera = "/obj/cam1"
-
-	fn trange = if rendTimeType == 1 then 0 else 1
-
-	--hou.parm('/out/vray_renderer/f1').deleteAllKeyframes()
-	--hou.parm('/out/vray_renderer/f2').deleteAllKeyframes()
+    render_camera = getActiveCamera()
+	if render_camera != undefined then render_camera = "/obj/" + toLower( render_camera.name ) else render_camera = "/obj/cam1"
 
 	script = "#vray_renderer\n"
-	script += "trange," + (trange()) as string + "\n"
+	script += "trange," + ( if rendTimeType == 1 then 0 else 1 ) as string + "\n"
 
 	if rendTimeType == 2 then
 	(
