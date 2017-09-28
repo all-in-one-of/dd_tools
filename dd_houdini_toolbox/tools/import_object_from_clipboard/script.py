@@ -80,7 +80,7 @@ if lines[0].startswith('#abc_export'):
                     if geo == None:
                         geo = obj.createNode( 'geo' , name )
                         geo.moveToGoodPosition()
-                        geo.parm( 'scale' ).set( 0.01 )
+                        #geo.parm( 'scale' ).set( 0.01 )
                         addVRayObjectIdParamTemplate( geo )
                     geo.parm( 'vray_objectID' ).set( object_id )
                     geo.parm( 'use_dcolor' ).set( True )
@@ -99,19 +99,57 @@ if lines[0].startswith('#abc_export'):
                     alembic.parm( 'fileName' ).set( '$HIP/geo/' + name + ".abc" )
                     alembic.parm( 'reload' ).pressButton()
 
+                    '''
+                    vraypoxy = geo.node( 'vrayproxy' )
+                    if vraypoxy == None:
+                        vraypoxy = geo.createNode('VRayNodeVRayProxy')
+                        vraypoxy.moveToGoodPosition()
+                    vraypoxy.parm('file').set('$HIP/geo/' + name + ".abc")
+                    vraypoxy.parm('loadtype').set(2)
+                    vraypoxy.parm('reload').pressButton()
+                    vraypoxy.parm('scale').set(0.01)
+                    vraypoxy.parm('flip_axis').set(1)                    
+                    
+                    unpack = geo.node( 'unpack1' )
+                    if unpack == None:
+                        unpack = vraypoxy.createOutputNode('unpack')
+                    '''
+
+                    '''
                     convert = geo.node( 'convert1' )
                     if convert == None:
                         convert = alembic.createOutputNode( 'convert' )
+                        #convert = unpack.createOutputNode('convert')
+                    '''
+
+                    xform = geo.node( 'xform1' )
+                    if xform == None:
+                        #xform = convert.createOutputNode('xform')
+                        xform = alembic.createOutputNode('xform', 'xform1')
+                    xform.parm('scale').set(0.01)
 
                     properties = geo.node( 'properties' )
                     if properties == None:
-                        properties = convert.createOutputNode( 'attribwrangle', 'properties' )
+                        #properties = convert.createOutputNode( 'attribwrangle', 'properties' )
+                        properties = xform.createOutputNode('attribwrangle', 'properties')
                         properties.parm( 'class' ).set( 0 )
                         properties.setDisplayFlag(True)
-                        properties.setRenderFlag(True)
+                        #properties.setRenderFlag(True)
                     properties.parm( 'snippet' ).set( 'v@wirecolor = set(' + str( wirecolor[0] ) + ', ' + str( wirecolor[1] ) + ', ' + str( wirecolor[2] ) + ');\ni@handle = ' + str( handle ) + ';' )
 
-                else:
+                    vraypoxy = geo.node('vrayproxy1')
+                    if vraypoxy == None:
+                        vraypoxy = geo.createNode('VRayNodeVRayProxy', 'vrayproxy1')
+                        vraypoxy.moveToGoodPosition()
+                    #vraypoxy.parm('file').set('$HIP/geo/' + name + ".abc")
+                    vraypoxy.parm('file').setExpression('`chs("../alembic1/fileName")`')
+                    vraypoxy.parm('reload').pressButton()
+                    #vraypoxy.parm('scale').set(0.01)
+                    vraypoxy.parm('scale').setExpression('ch("../xform1/scale")')
+                    vraypoxy.moveToGoodPosition()
+                    vraypoxy.setRenderFlag(True)
+
+            else:
                     print( 'cannot import ' + name + ', cannot access temporary .abc file' )
 
     print('object(s) sucessfully imported')
