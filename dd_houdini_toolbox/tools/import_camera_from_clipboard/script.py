@@ -320,17 +320,24 @@ def importCameraFromClipboard():
                         camera.parm('constraints_on').set(1)
                         camera.parm('constraints_path').set('constraints')
 
-                elif parm_name == 'type':
-                    camera_type = parm_val
-                    if camera_type == 'target':
-                        camera_target = obj.node(camera_name + '_target')
-                        if camera_target == None:
-                            camera_target = createCameraTarget(obj, camera)
-                        else:
-                            for p in (camera_target.parms()):
-                                p.deleteAllKeyframes()
+                # elif parm_name == 'type':
+                #     camera_type = parm_val
+                #     if camera_type == 'target':
+                #         camera_target = obj.node(camera_name + '_target')
+                #         if camera_target == None:
+                #             camera_target = createCameraTarget(obj, camera)
+                #         else:
+                #             for p in (camera_target.parms()):
+                #                 p.deleteAllKeyframes()
 
                 elif line.startswith('target_'):
+                    camera_target = obj.node(camera_name + '_target')
+                    if camera_target == None:
+                        camera_target = createCameraTarget(obj, camera)
+                    else:
+                        for p in (camera_target.parms()):
+                            p.deleteAllKeyframes()
+
                     if is_tuple:
                         for k in parm_val:
                             setKey = hou.Keyframe()
@@ -355,9 +362,9 @@ def importCameraFromClipboard():
                         error_count += 1
 
         if error_count == 0:
-            print('light successfully imported')
+            print('camera successfully imported')
         else:
-            print('light imported with ' + str(error_count) + " errors")
+            print('camera imported with ' + str(error_count) + " errors")
 
     else:
         print('cannot apply clipboad values, wrong type!')

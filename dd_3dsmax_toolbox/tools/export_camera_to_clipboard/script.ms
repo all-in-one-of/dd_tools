@@ -92,7 +92,7 @@ fn exportcameratoclipboard _o =
     _script += "name,'" + toLower(_o.name) + "'\n"
 
     --type
-    _script += "type,'" + substituteString (toLower((classOf _o) as string)) "camera" "" + "'\n"
+    --_script += "type,'" + substituteString (toLower((classOf _o) as string)) "camera" "" + "'\n"
 
     --if target
     if _o.target != undefined do
