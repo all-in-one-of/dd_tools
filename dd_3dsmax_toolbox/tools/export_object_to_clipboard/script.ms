@@ -65,6 +65,7 @@ fn exportObject _o _script animated:false step:1 substeps:1 =
         jobString += ";mergePolyMeshSubtree=true"
         jobString += ";particlesystemtomeshconversion=true"
         --jobString += ";dynamictopology=true"
+        jobString += ";transformCache=true"
         jobString += ";storageFormat=hdf5"
         result = ExocortexAlembic.createExportJobs( jobString )
         if( result != 0 ) then
