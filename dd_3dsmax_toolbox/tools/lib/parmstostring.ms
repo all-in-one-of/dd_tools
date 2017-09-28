@@ -1,7 +1,7 @@
+fn upperfirst s = ((toUpper s[1]) + (substring s 2 s.count))
+
 fn parmstostring n =
 (
-	fn upperfirst s = ((toUpper s[1]) + (substring s 2 s.count))
-
 	script = ""
 	global glob_n
 	glob_n = n
@@ -9,7 +9,7 @@ fn parmstostring n =
 	
 	if n != undefined then
 	(
-        pc_fname = lib_dir + "\\" + tolower((classOf n) as string) + ".pc"
+        pc_fname = lib_dir + "\\" + toLower((classOf n) as string) + ".pc"
         if doesfileexist pc_fname then
         (
             file = openFile pc_fname
@@ -18,7 +18,7 @@ fn parmstostring n =
                 r =  readLine file
                 if substring r 1 3 == "fn " then
                     execute r
-                else if r != "" and r[1] != "!" do
+                else if r != "" and r[1] != "!" and r[1] != "#" do
                 (
                     split1 = filterString r ":"
                     split2 = filterString split1[1] "/"
