@@ -60,7 +60,7 @@ fn formatTuple _tuple =
 
 fn exportlighttoclipboard _o =
 (
-    _t = maxtohoudinigetcameratransforms _o
+    _t = maxtohoudinigettransforms _o
 
     _p_x = for i in _t collect ( #( i[1], i[2].position.x / 100. ) )
     _p_y = for i in _t collect ( #( i[1], i[2].position.y / 100. ) )
@@ -165,12 +165,13 @@ fn exportlighttoclipboard _o =
             0 : (
                 --Plane
                 _script += "is_disc,False\n"
-                _script += "u_size," + ( _o.size0 / 100.) as string + "\n"
-                _script += "v_size," + ( _o.size1 / 100.) as string + "\n"
+                _script += "u_size," + ( _o.size0 / 100. ) as string + "\n"
+                _script += "v_size," + ( _o.size1 / 100. ) as string + "\n"
                 _script += "directional," + _o.lightDistribution as string + "\n"
                 _script += "ignoreLightNormals," + upperfirst( _o.ignoreNormals as string ) + "\n"
                 _script += "doubleSided," + upperfirst( _o.DoubleSided as string ) + "\n"
                 _script += "lightPortal," + (get_lightPortal()) as string + "\n"
+                _script += "noDecay," + upperfirst( _o.noDecay as string ) + "\n"
             )
             1 : (
                 --Dome
@@ -181,12 +182,13 @@ fn exportlighttoclipboard _o =
                 --texmap_locktodome pas d'equivalent sous houdini
                 _script += "dome_rayDistanceMode," + _o.dome_rayDistanceMode as string + "\n"
                 _script += "dome_rayDistance," + _o.dome_rayDistance as string + "\n"
-                _script += "dome_targetRadius," + _o.dome_targetRadius as string + "\n"
-                _script += "dome_emitRadius," + _o.dome_emitRadius as string + "\n"
+                _script += "dome_targetRadius," + ( _o.dome_targetRadius / 100. ) as string + "\n"
+                _script += "dome_emitRadius," + ( _o.dome_emitRadius / 100. ) as string  + "\n"
             )
             2 : (
                 --Sphere
                 _script += "radius," + ( _o.size0 / 100.) as string + "\n"
+                _script += "noDecay," + upperfirst( _o.noDecay as string ) + "\n"
             )
             3 : (
                 --Mesh
@@ -195,6 +197,7 @@ fn exportlighttoclipboard _o =
                 _script += "ignoreLightNormals," + upperfirst( _o.ignoreNormals as string ) + "\n"
                 _script += "doubleSided," + upperfirst( _o.DoubleSided as string ) + "\n"
                 _script += "lightPortal," + (get_lightPortal()) as string + "\n"
+                _script += "noDecay," + upperfirst( _o.noDecay as string ) + "\n"
             )
             4 : (
                 --Disc
@@ -205,6 +208,7 @@ fn exportlighttoclipboard _o =
                 _script += "ignoreLightNormals," + _o.ignoreNormals as string + "\n"
                 _script += "doubleSided," + upperfirst( _o.DoubleSided as string ) + "\n"
                 _script += "lightPortal," + (get_lightPortal()) as string + "\n"
+                _script += "noDecay," + upperfirst( _o.noDecay as string ) + "\n"
             )
         )
 
@@ -223,7 +227,6 @@ fn exportlighttoclipboard _o =
         --exclude a faire
         _script += "shadows," + upperfirst( _o.castShadows as string ) + "\n"
         _script += "invisible," + upperfirst( _o.invisible as string ) + "\n"
-        _script += "noDecay," + upperfirst( _o.noDecay as string ) + "\n"
         _script += "storeWithIrradianceMap," + upperfirst( _o.storeWithIrradMap as string ) + "\n"
         _script += "affectDiffuse," + upperfirst( _o.affect_diffuse as string ) + "\n"
         _script += "affectSpecular," + upperfirst( _o.affect_specular as string ) + "\n"

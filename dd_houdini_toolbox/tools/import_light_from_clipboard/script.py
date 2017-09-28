@@ -222,6 +222,11 @@ def importLightFromClipboard():
                                 for p in (light_target.parms()):
                                     p.deleteAllKeyframes()
 
+                        null = light.createNode('null')
+                        null.setRenderFlag(True)
+                        # null.moveToGoodPosition()
+                        light.layoutChildren()
+
                     else:
                         if light.type().name() != light_type:
                             light.changeNodeType(light_type)
@@ -232,17 +237,14 @@ def importLightFromClipboard():
                         light.parm('constraints_on').set(1)
                         light.parm('constraints_path').set('constraints')
 
-                elif parm_name == 'type':
-                    light_type = parm_val
-                    if light_type == 'target':
-                        light_target = obj.node(light_name + '_target')
-                        if light_target == None:
-                            light_target = createLightTarget(obj, light)
-                        else:
-                            for p in (light_target.parms()):
-                                p.deleteAllKeyframes()
-
                 elif line.startswith('target_'):
+                    light_target = obj.node(light_name + '_target')
+                    if light_target == None:
+                        light_target = createLightTarget(obj, light)
+                    else:
+                        for p in (light_target.parms()):
+                            p.deleteAllKeyframes()
+
                     if is_tuple:
                         for k in parm_val:
                             setKey = hou.Keyframe()
