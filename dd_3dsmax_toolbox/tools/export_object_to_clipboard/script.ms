@@ -33,10 +33,9 @@ fn objectIsAnimated _o =
 )
 */
 
-
-
-fn exportObject _o _script animated:false step:1 substeps:1 =
+fn exportObject _o animated:false step:1 substeps:1 =
 (
+    _script = ""
     _name = toLower( substituteString ( substituteString _o.name " " "_" ) "." "_" )
     _abcfile = sysinfo.tempdir + _name + ".abc"
     frange = [0,100]
@@ -105,7 +104,7 @@ if selection.count > 0 then
             if superClassOf _o == GeometryClass or superClassOf _o == shape and classOf _o != Targetobject then
             (
                 animated = ( _o.isAnimated or isDeformable _o )
-                _script = exportObject _o _script animated:animated step:1 substeps:1
+                _script += exportObject _o animated:animated step:1 substeps:1
             )
             else print(_o.name +  " is not geometry or shape" )
         )else print(_o.name +  " is not a valid node" )
