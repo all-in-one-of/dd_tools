@@ -95,7 +95,7 @@ if lines[0].startswith('#abc_export'):
                     alembic = geo.node( 'alembic1' )
                     if alembic == None:
                         alembic = geo.createNode( 'alembic' )
-                        alembic.moveToGoodPosition()
+                        #alembic.moveToGoodPosition()
                     alembic.parm( 'fileName' ).set( '$HIP/geo/' + name + ".abc" )
                     alembic.parm( 'reload' ).pressButton()
 
@@ -142,12 +142,14 @@ if lines[0].startswith('#abc_export'):
                         vraypoxy = geo.createNode('VRayNodeVRayProxy', 'vrayproxy1')
                         vraypoxy.moveToGoodPosition()
                     #vraypoxy.parm('file').set('$HIP/geo/' + name + ".abc")
-                    vraypoxy.parm('file').setExpression('`chs("../alembic1/fileName")`')
+                    vraypoxy.parm('file').setExpression('chs("../alembic1/fileName")')
                     vraypoxy.parm('reload').pressButton()
                     #vraypoxy.parm('scale').set(0.01)
                     vraypoxy.parm('scale').setExpression('ch("../xform1/scale")')
-                    vraypoxy.moveToGoodPosition()
+                    #vraypoxy.moveToGoodPosition()
                     vraypoxy.setRenderFlag(True)
+
+                    geo.layoutChildren()
 
             else:
                     print( 'cannot import ' + name + ', cannot access temporary .abc file' )
