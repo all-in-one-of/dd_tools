@@ -29,46 +29,105 @@ def parse_vrscene_file(fname, plugins, connections):
     content = ''
 
     with open(fname, 'r') as content_file:
-        content = content_file.read()
+        content = re.sub(re.compile("//.*?\n"), "", content_file.read())  # load content without comments
 
     matches = re.finditer(regex, content, re.MULTILINE | re.DOTALL)
+
+    error_count = 0
+
+    black_listed_parms = ('roughness_model', 'option_use_roughness', 'subdivs_as_samples')
+
     for matchNum, match in enumerate(matches):
-        type = 'VRayNode' + match.group(1).strip()
-        name = match.group(2).strip().replace('@', '_')
-        split = match.group(3).split(';')
-        parms = list()
-        for p in (i for i in split if i.strip() != ''):
-            parm = p.strip().split('=', 1)
-            parm_name = parm[0]
-            parm_val = parm[1]
+        # print 'match:' + match.group(1).strip()
+        type = match.group(1).strip()
 
-            if (parm_val).__contains__('@') or parm_val.__contains__('bitmapBuffer'):
-                connections.append({'From': name, 'Input': parm_name, 'To': parm_val.replace('@', '_')})
-            else:
+        if type != 'SettingsRTEngine' and not type.startswith(
+                'RenderChannel') and type != 'GeomStaticMesh' and type != 'Node' and not type.startswith(
+            'Light') and not type.startswith('Settings') and type != 'FilterLanczos' and not type.startswith(
+            'Camera') and type != 'RenderView':
 
-                if parm_val.startswith('Transform') or parm_val.startswith('interpolate'):
-                    pass
+            name = match.group(2).strip().replace('@', '_')
+            split = match.group(3).split(';')
+            parms = list()
+            for p in (i for i in split if i.strip() != ''):
+                parm = p.strip().split('=', 1)
+                parm_name = parm[0]
+                parm_val = parm[1]
 
+                if (parm_val).__contains__('@') or parm_val.__contains__('bitmapBuffer') or parm_val.startswith('List'):
+
+                    if type == 'MtlMulti' and parm_name == 'mtls_list':
+
+                        mtls_list = (re.match(r"List\((.*?)\)", parm_val, re.MULTILINE | re.DOTALL)).group(1).replace(
+                            '@', '_').replace(' ', '').replace('\n', '').split(',')
+                        parms.append({'Name': 'mtl_count', 'Value': len(mtls_list)})
+                        for i in range(0, len(mtls_list)):
+                            if mtls_list[i] != '0':
+                                connections.append({'From': name, 'Input': 'mtl_' + str(i + 1), 'To': mtls_list[i]})
+
+                    elif type == 'BRDFLayered':
+                        if parm_name == 'brdfs':
+                            brdfs = (re.match(r"List\((.*?)\)", parm_val, re.MULTILINE | re.DOTALL)).group(
+                                1).replace(
+                                '@', '_').replace(' ', '').replace('\n', '').split(',')[::-1]  # reversed
+                            parms.append({'Name': 'brdf_count', 'Value': len(brdfs)})
+                            for i in range(0, len(brdfs)):
+                                connections.append({'From': name, 'Input': 'brdf_' + str(i + 1), 'To': brdfs[i]})
+
+                        elif parm_name == 'weights':
+                            weights = (re.match(r"List\((.*?)\)", parm_val, re.MULTILINE | re.DOTALL)).group(
+                                1).replace(
+                                '@', '_').replace(' ', '').replace('\n', '').split(',')[::-1]  # reversed
+                            for i in range(0, len(weights)):
+                                connections.append({'From': name, 'Input': 'weight_' + str(i + 1), 'To': weights[i]})
+
+                    else:
+                        connections.append({'From': name, 'Input': parm_name, 'To': parm_val.replace('@', '_')})
                 else:
-                    try:
-                        if parm_val.startswith('\"') and parm_val.endswith('\"'):
-                            parm_val = parm_val[1:-1]
 
-                        elif parm_val.startswith('Color'):
-                            parm_val = hou.Vector3(eval(parm_val[5:]))
+                    if any(n in parm_name for n in black_listed_parms) or parm_val.startswith(
+                            'Transform') or parm_val.startswith('interpolate') or parm_val.startswith(
+                                'Matrix' or parm_val.startswith('List')):
 
-                        elif parm_val.startswith('AColor'):
-                            parm_val = hou.Vector4(eval(parm_val[6:]))
+                        print 'parameter type: ' + parm_name + ' ingnored'
 
-                        else:
-                            parm_val = eval(parm_val)
 
-                    except:
-                        print 'cannot evaluate parm: ' + parm_val
+                    else:
+                        try:
+                            if parm_val.startswith('\"') and parm_val.endswith('\"'):
+                                parm_val = parm_val[1:-1]
+                                if type == 'UVWGenEnvironment' and parm_name == 'mapping_type':
+                                    if parm_val == 'mirror_ball':
+                                        parm_val = 3
+                                    if parm_val == 'cubic':
+                                        parm_val = 1
+                                    if parm_val == 'angular':
+                                        parm_val = 3
+                                    if parm_val == 'spherical_vray':
+                                        parm_val = 6
 
-                    parms.append({'Name': parm_name, 'Value': parm_val})
+                            elif parm_val.startswith('Color'):
+                                parm_val = hou.Vector3(eval(parm_val[5:]))
 
-        plugins.append({'Type': type, 'Name': name, 'Parms': parms})
+                            elif parm_val.startswith('AColor'):
+                                parm_val = hou.Vector4(eval(parm_val[6:]))
+
+                            else:
+                                parm_val = eval(parm_val)
+
+                        except:
+                            print 'cannot setting value: ' + str(
+                                parm_val) + ' on parameter: ' + parm_name + ' on node: ' + name
+                            error_count += 1
+
+                        parms.append({'Name': parm_name, 'Value': parm_val})
+
+            plugins.append({'Type': 'VRayNode' + type, 'Name': name, 'Parms': parms})
+
+        else:
+            print 'node type: ' + type + ' ingnored'
+
+    return error_count
 
 
 shop = hou.node('/shop')
@@ -82,12 +141,12 @@ connections = list()
 error_count = 0
 
 if lines.count > 1:
-    if lines[0] == '#material_export':
+    if lines[0] == '#scene_export':
         for line in lines[1:]:
             ls = line.split(',', 1)
             if len(ls) == 2:
                 if ls[0] == 'filename':
-                    parse_vrscene_file(ls[1], plugins, connections)
+                    error_count += parse_vrscene_file(ls[1], plugins, connections)
 
 mat = shop.createNode('vray_material')
 mat.node('VRayNodeBRDFVRayMtl1').destroy()
@@ -103,21 +162,29 @@ def trySetParm(node, parm_name, parm_val):
             node.parm(parm_name).set(parm_val)
 
     except:
-        print('cannot setting value: ' + str(parm_val) + ' on parameter: ' + parm_name + ' on node: ' + node.name())
+        print 'cannot setting value: ' + str(
+            parm_val) + ' on parameter: ' + parm_name + ' on node: ' + node.name()  # + ' ( ' + node.type().name() + ' ) '
         error_count += 1
     return error_count
 
 
 for plugin in plugins:
-    node = mat.createNode(plugin['Type'])
-    try:
-        node.setName(plugin['Name'])
-    except:
-        print('cannot setting name: ' + plugin['Name'])
-        error_count += 1
+    node = None
 
-    for parm in plugin['Parms']:
-        error_count += trySetParm(node, parm['Name'], parm['Value'])
+    try:
+        node = mat.createNode(plugin['Type'])
+    except:
+        print('cannot creating node type: ' + plugin['Type'])
+        error_count += 1
+    if node != None:
+        try:
+            node.setName(plugin['Name'])
+        except:
+            print('cannot setting name: ' + plugin['Name'])
+            error_count += 1
+
+        for parm in plugin['Parms']:
+            error_count += trySetParm(node, parm['Name'], parm['Value'])
 
 for connection in connections:
     node = mat.node(connection['From'])
@@ -128,12 +195,13 @@ for connection in connections:
         input_node.destroy()
 
     else:
+        if node != None and input_node != None:
 
-        if input_node.type().name() == 'VRayNodeTexCombineFloat':
-            colortofloat = input_node.createOutputNode('VRayNodeTexColorToFloat')
-            node.setInput(input_index, colortofloat)
-        else:
-            node.setInput(input_index, input_node)
+            if input_node.type().name() == 'VRayNodeTexCombineFloat':
+                colortofloat = input_node.createOutputNode('VRayNodeTexColorToFloat')
+                node.setInput(input_index, colortofloat)
+            else:
+                node.setInput(input_index, input_node)
 
 material_output = mat.node('vray_material_output1')
 if material_output == None:

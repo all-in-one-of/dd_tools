@@ -2,16 +2,14 @@
 fn writeVRScenefiles _start:currentframe _end:currentframe =
 (
     _script = ""
-    _vrscenefile = sysinfo.tempdir + getFilenameFile maxfilename
+    _vrscenefile = sysinfo.tempdir + getFilenameFile maxfilename + ".vrscene"
 
     if _start != currentframe and _end != currentframe then
-        vrayExportRTScene ( _vrscenefile + ".vrscene" ) separateFiles:true exportView:false exportLights:false exportGeometry:false exportNodes:false exportMaterials:true exportTextures:true exportBitmaps:true prefix:"" startFrame:_start endFrame:_end stripPaths:false
+        vrayExportRTScene _vrscenefile exportCompressed:false exportHEXFormatMesh:false exportHEXFormatTransf:false separateFiles:false exportView:true exportLights:true exportGeometry:false exportNodes:true exportMaterials:true exportTextures:true exportBitmaps:true prefix:"" startFrame:_start endFrame:_end stripPaths:false
     else
-        vrayExportRTScene ( _vrscenefile + ".vrscene" ) separateFiles:true exportView:false exportLights:false exportGeometry:false exportNodes:false exportMaterials:true exportTextures:true exportBitmaps:true prefix:"" stripPaths:false
+        vrayExportRTScene _vrscenefile exportCompressed:false exportHEXFormatMesh:false exportHEXFormatTransf:false separateFiles:false exportView:true exportLights:true exportGeometry:false exportNodes:true exportMaterials:true exportTextures:true exportBitmaps:true prefix:"" stripPaths:false
 
-    _script += "filename," + _vrscenefile + "_materials.vrscene\n"
-    _script += "filename," + _vrscenefile + "_textures.vrscene\n"
-    _script += "filename," + _vrscenefile + "_bitmaps.vrscene\n"
+    _script += "filename," + _vrscenefile + "\n"
 
     _script
 )
@@ -20,7 +18,7 @@ fn writeVRScenefiles _start:currentframe _end:currentframe =
 
 --if selection.count > 0 then
 --(
-    _script = "#material_export\n\n"
+    _script = "#scene_export\n\n"
     --for _o in selection do
     --(
         --if isValidNode _o == true then
