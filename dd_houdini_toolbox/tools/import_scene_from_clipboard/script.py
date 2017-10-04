@@ -22,7 +22,7 @@ elif parm_val.startswith('interpolate'):
     pass'''
 
 
-def parse_vrscene_file(fname, plugins, connections):
+def parse_vrscene_file(fname, plugins, connections, cameras, lights, settings, renderChannels):
     import re
 
     regex = r"(.*?)\ (.*?)\ {(.*?)\}"
@@ -40,28 +40,51 @@ def parse_vrscene_file(fname, plugins, connections):
     for matchNum, match in enumerate(matches):
         # print 'match:' + match.group(1).strip()
         type = match.group(1).strip()
+        name = match.group(2).strip().replace('@', '_').replace('__', '_')
 
-        if type != 'SettingsRTEngine' and not type.startswith(
-                'RenderChannel') and type != 'GeomStaticMesh' and type != 'Node' and not type.startswith(
-            'Light') and not type.startswith('Settings') and type != 'FilterLanczos' and not type.startswith(
-            'Camera') and type != 'RenderView':
+        parmlist = list()
 
-            name = match.group(2).strip().replace('@', '_').replace('__', '_')
-            split = match.group(3).split(';')
+        for p in (i for i in match.group(3).split(';') if i.strip() != ''):
+            split = p.strip().split('=', 1)
+            parmlist.append({'Name': split[0], 'Value': split[1]})
+
+        if type == 'GeomStaticMesh' or type == 'Node' or type == 'RenderView':
+            pass
+
+        # catch vray render settings
+        elif type.startswith('Settings') or type.startswith('Filter'):
+            pass
+
+        # catch vray render channels
+        elif type.startswith('RenderChannel'):
+            pass
+
+        # catch lights
+        elif type.startswith('Light'):
+            pass
+
+        # cath cameras
+        elif type.startswith('Camera'):
+            pass
+
+        else:
+
             parms = list()
-            for p in (i for i in split if i.strip() != ''):
-                parm = p.strip().split('=', 1)
-                parm_name = parm[0]
-                parm_val = parm[1]
+
+            for parm in parmlist:
+                parm_name = parm['Name']
+                parm_val = parm['Value']
 
                 if type == 'BRDFBump' and parm_name == 'bump_tex':
-                    parm_name = 'bump_tex_color' # ou 'bump_tex_float' je sais pas trop...
+                    parm_name = 'bump_tex_color'  # ou 'bump_tex_float' je sais pas trop...
 
-                if (parm_val).__contains__('@') or parm_val.__contains__('bitmapBuffer') or parm_val.startswith('List'):
+                if (parm_val).__contains__('@') or parm_val.__contains__('bitmapBuffer') or parm[
+                    'Value'].startswith('List'):
 
                     if type == 'MtlMulti' and parm_name == 'mtls_list':
 
-                        mtls_list = (re.match(r"List\((.*?)\)", parm_val, re.MULTILINE | re.DOTALL)).group(1).replace(
+                        mtls_list = (re.match(r"List\((.*?)\)", parm_val, re.MULTILINE | re.DOTALL)).group(
+                            1).replace(
                             '@', '_').replace('__', '_').replace(' ', '').replace('\n', '').split(',')
                         parms.append({'Name': 'mtl_count', 'Value': len(mtls_list)})
                         for i in range(0, len(mtls_list)):
@@ -72,7 +95,8 @@ def parse_vrscene_file(fname, plugins, connections):
                         if parm_name == 'brdfs':
                             brdfs = (re.match(r"List\((.*?)\)", parm_val, re.MULTILINE | re.DOTALL)).group(
                                 1).replace(
-                                '@', '_').replace('__', '_').replace(' ', '').replace('\n', '').split(',')[::-1]  # reversed
+                                '@', '_').replace('__', '_').replace(' ', '').replace('\n', '').split(',')[
+                                    ::-1]  # reversed
                             parms.append({'Name': 'brdf_count', 'Value': len(brdfs)})
                             for i in range(0, len(brdfs)):
                                 connections.append({'From': name, 'Input': 'brdf_' + str(i + 1), 'To': brdfs[i]})
@@ -80,11 +104,14 @@ def parse_vrscene_file(fname, plugins, connections):
                         elif parm_name == 'weights':
                             weights = (re.match(r"List\((.*?)\)", parm_val, re.MULTILINE | re.DOTALL)).group(
                                 1).replace(
-                                '@', '_').replace('__', '_').replace(' ', '').replace('\n', '').split(',')[::-1]  # reversed
+                                '@', '_').replace('__', '_').replace(' ', '').replace('\n', '').split(',')[
+                                      ::-1]  # reversed
                             for i in range(0, len(weights)):
                                 connections.append({'From': name, 'Input': 'weight_' + str(i + 1), 'To': weights[i]})
                     else:
-                        connections.append({'From': name, 'Input': parm_name, 'To': parm_val.replace('@', '_').replace('__', '_')})
+                        connections.append(
+                            {'From': name, 'Input': parm_name,
+                             'To': parm_val.replace('@', '_').replace('__', '_')})
                 else:
 
                     if any(n in parm_name for n in black_listed_parms) or parm_val.startswith(
@@ -126,9 +153,6 @@ def parse_vrscene_file(fname, plugins, connections):
 
             plugins.append({'Type': 'VRayNode' + type, 'Name': name, 'Parms': parms})
 
-        else:
-            print 'node type: ' + type + ' ingnored'
-
     return error_count
 
 
@@ -139,6 +163,10 @@ lines = text.splitlines()
 
 plugins = list()
 connections = list()
+cameras = list()
+lights = list()
+settings = list()
+renderChannels = list()
 
 error_count = 0
 
@@ -148,7 +176,8 @@ if lines.count > 1:
             ls = line.split(',', 1)
             if len(ls) == 2:
                 if ls[0] == 'filename':
-                    error_count += parse_vrscene_file(ls[1], plugins, connections)
+                    error_count += parse_vrscene_file(ls[1], plugins, connections, cameras, lights, settings,
+                                                      renderChannels)
 
 mat = shop.createNode('vray_material')
 mat.node('VRayNodeBRDFVRayMtl1').destroy()
@@ -239,6 +268,6 @@ for child in (c for c in mat.children() if
 mat.layoutChildren()
 
 if error_count > 0:
-    print('material imported with: ' + str(error_count) + ' errors')
+    print('scene imported with: ' + str(error_count) + ' errors')
 else:
-    print('material successfully imported')
+    print('scene successfully imported')
