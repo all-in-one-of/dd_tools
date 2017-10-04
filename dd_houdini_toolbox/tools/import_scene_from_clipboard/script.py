@@ -46,7 +46,7 @@ def parse_vrscene_file(fname, plugins, connections):
             'Light') and not type.startswith('Settings') and type != 'FilterLanczos' and not type.startswith(
             'Camera') and type != 'RenderView':
 
-            name = match.group(2).strip().replace('@', '_')
+            name = match.group(2).strip().replace('@', '_').replace('__', '_')
             split = match.group(3).split(';')
             parms = list()
             for p in (i for i in split if i.strip() != ''):
@@ -54,12 +54,15 @@ def parse_vrscene_file(fname, plugins, connections):
                 parm_name = parm[0]
                 parm_val = parm[1]
 
+                if type == 'BRDFBump' and parm_name == 'bump_tex':
+                    parm_name = 'bump_tex_color' # ou 'bump_tex_float' je sais pas trop...
+
                 if (parm_val).__contains__('@') or parm_val.__contains__('bitmapBuffer') or parm_val.startswith('List'):
 
                     if type == 'MtlMulti' and parm_name == 'mtls_list':
 
                         mtls_list = (re.match(r"List\((.*?)\)", parm_val, re.MULTILINE | re.DOTALL)).group(1).replace(
-                            '@', '_').replace(' ', '').replace('\n', '').split(',')
+                            '@', '_').replace('__', '_').replace(' ', '').replace('\n', '').split(',')
                         parms.append({'Name': 'mtl_count', 'Value': len(mtls_list)})
                         for i in range(0, len(mtls_list)):
                             if mtls_list[i] != '0':
@@ -69,7 +72,7 @@ def parse_vrscene_file(fname, plugins, connections):
                         if parm_name == 'brdfs':
                             brdfs = (re.match(r"List\((.*?)\)", parm_val, re.MULTILINE | re.DOTALL)).group(
                                 1).replace(
-                                '@', '_').replace(' ', '').replace('\n', '').split(',')[::-1]  # reversed
+                                '@', '_').replace('__', '_').replace(' ', '').replace('\n', '').split(',')[::-1]  # reversed
                             parms.append({'Name': 'brdf_count', 'Value': len(brdfs)})
                             for i in range(0, len(brdfs)):
                                 connections.append({'From': name, 'Input': 'brdf_' + str(i + 1), 'To': brdfs[i]})
@@ -77,12 +80,11 @@ def parse_vrscene_file(fname, plugins, connections):
                         elif parm_name == 'weights':
                             weights = (re.match(r"List\((.*?)\)", parm_val, re.MULTILINE | re.DOTALL)).group(
                                 1).replace(
-                                '@', '_').replace(' ', '').replace('\n', '').split(',')[::-1]  # reversed
+                                '@', '_').replace('__', '_').replace(' ', '').replace('\n', '').split(',')[::-1]  # reversed
                             for i in range(0, len(weights)):
                                 connections.append({'From': name, 'Input': 'weight_' + str(i + 1), 'To': weights[i]})
-
                     else:
-                        connections.append({'From': name, 'Input': parm_name, 'To': parm_val.replace('@', '_')})
+                        connections.append({'From': name, 'Input': parm_name, 'To': parm_val.replace('@', '_').replace('__', '_')})
                 else:
 
                     if any(n in parm_name for n in black_listed_parms) or parm_val.startswith(
@@ -186,22 +188,43 @@ for plugin in plugins:
         for parm in plugin['Parms']:
             error_count += trySetParm(node, parm['Name'], parm['Value'])
 
+
+def trySetInput(node, input, input_node):
+    error_count = 0
+    input_index = None
+
+    try:
+        input_index = node.inputIndex(input)
+    except:
+        print 'cannot find input: ' + str(input) + ' on node: ' + node.name()
+        error_count += 1
+
+    if input_index != None:
+        try:
+            node.setInput(input_index, input_node)
+        except:
+            print 'cannot set input: ' + str(input) + ' from node: ' + node.name() + ' to node: ' + input_node.name()
+            error_count += 1
+
+    return error_count
+
+
 for connection in connections:
     node = mat.node(connection['From'])
     input_node = mat.node(connection['To'])
-    input_index = node.inputIndex(connection['Input'])
+    input = connection['Input']
 
     if connection['Input'] == 'normal_uvwgen':
-        input_node.destroy()
-
+        # input_node.destroy()
+        error_count += trySetInput(node, input, input_node)  # temp
     else:
         if node != None and input_node != None:
 
             if input_node.type().name() == 'VRayNodeTexCombineFloat':
                 colortofloat = input_node.createOutputNode('VRayNodeTexColorToFloat')
-                node.setInput(input_index, colortofloat)
+                error_count += trySetInput(node, input, colortofloat)
             else:
-                node.setInput(input_index, input_node)
+                error_count += trySetInput(node, input, input_node)
 
 material_output = mat.node('vray_material_output1')
 if material_output == None:
@@ -210,7 +233,8 @@ if material_output == None:
 for child in (c for c in mat.children() if
               len(c.outputConnections()) == 0 and c.name().__contains__(
                   '_mtl_')):  # and c.type().name() != 'vray_material_output'):
-    material_output.setInput(0, child)
+    # material_output.setInput(0, child)
+    error_count += trySetInput(material_output, 'Material', child)
 
 mat.layoutChildren()
 
