@@ -8,7 +8,7 @@ except ImportError:
 
 # black_listed_parms = ('roughness_model', 'option_use_roughness', 'subdivs_as_samples')
 
-global re, parse_vrscene_file, import_scene_from_clipboard, get_vray_rop_node, try_parse_parm_value, normalize_name, try_set_parm, load_settings, load_cameras, load_lights, load_render_channels, get_render_channels_container, load_nodes, load_materials, get_material_output
+global re, parse_vrscene_file, import_scene_from_clipboard, get_vray_rop_node, try_parse_parm_value, normalize_name, try_set_parm, load_settings, load_cameras, load_lights, load_render_channels, get_render_channels_container, load_nodes, load_materials, try_set_input, get_material_output
 
 
 def parse_vrscene_file(fname, plugins, cameras, lights, settings, renderChannels, nodes):
@@ -339,6 +339,26 @@ def get_material_output(material):
     return material_output
 
 
+def try_set_input(node, input, input_node):
+    error_count = 0
+    input_index = None
+
+    try:
+        input_index = node.inputIndex(input)
+    except:
+        print 'cannot find input: ' + str(input) + ' on node: ' + node.name()
+        error_count += 1
+
+    if input_index != None:
+        try:
+            node.setInput(input_index, input_node)
+        except:
+            print 'cannot set input: ' + str(input) + ' from node: ' + node.name() + ' to node: ' + input_node.name()
+            error_count += 1
+
+    return error_count
+
+
 def load_materials(plugins, material_list):
     # loading materials
     message_stack = list()
@@ -366,7 +386,8 @@ def load_materials(plugins, material_list):
                     node.setName(normalize_name(n['Name']))
 
                 material_output = get_material_output(material)
-                material_output.setInput(0, node)
+                #material_output.setInput(0, node)
+                try_set_input(material_output, 'Material', node)
 
                 name = n['Name']
                 type = n['Type']
