@@ -8,7 +8,7 @@ except ImportError:
 
 # black_listed_parms = ('roughness_model', 'option_use_roughness', 'subdivs_as_samples')
 
-global re, parse_vrscene_file, import_scene_from_clipboard, get_vray_rop_node, try_parse_parm_value, normalize_name, try_set_parm, load_settings, load_render_channels, get_render_channels_container, load_nodes, load_materials, get_material_output
+global re, parse_vrscene_file, import_scene_from_clipboard, get_vray_rop_node, try_parse_parm_value, normalize_name, try_set_parm, load_settings, load_cameras, load_lights, load_render_channels, get_render_channels_container, load_nodes, load_materials, get_material_output
 
 
 def parse_vrscene_file(fname, plugins, cameras, lights, settings, renderChannels, nodes):
@@ -24,7 +24,7 @@ def parse_vrscene_file(fname, plugins, cameras, lights, settings, renderChannels
         type = match.group(1).strip()
 
         # do not catch parameters from GeomStaticMesh !
-        if type != 'GeomStaticMesh' and type != 'RenderView':
+        if type != 'GeomStaticMesh' and type != 'RenderView' and type != 'Filter' and type != 'SettingsEnvironment':
 
             name = match.group(2).strip()
             parms = list()
@@ -38,20 +38,20 @@ def parse_vrscene_file(fname, plugins, cameras, lights, settings, renderChannels
             if type == 'Node':
                 nodes.append({'Type': type, 'Name': name, 'Parms': parms})
 
-            # catch vray render settings
-            elif type.startswith('Settings') or type.startswith('Filter'):
-                settings.append({'Type': type, 'Name': name, 'Parms': parms})
-
             # catch vray render channels
-            elif type.startswith('RenderChannel'):
+            elif 'RenderChannel' in type:
                 renderChannels.append({'Type': type, 'Name': name, 'Parms': parms})
 
+            # catch vray render settings
+            elif 'Settings' in type:
+                settings.append({'Type': type, 'Name': name, 'Parms': parms})
+
             # catch lights
-            elif type.startswith('Light'):
+            elif 'Light' in type:
                 lights.append({'Type': type, 'Name': name, 'Parms': parms})
 
             # catch cameras
-            elif type.startswith('Camera'):
+            elif 'Camera' in type:
                 cameras.append({'Type': type, 'Name': name, 'Parms': parms})
 
             else:
@@ -157,6 +157,75 @@ def load_settings(settings):
         print m
 
 
+def load_cameras(cameras):
+    # loading settings
+    message_stack = list()
+    obj = hou.node('/obj')
+
+    print '\n\n\n#############################################'
+    print '#############  LOADING CAMERAS  #############'
+    print '#############################################\n\n'
+
+    for c in cameras:
+        name = c['Name'].split('@', 1)[0]
+
+        print name + " ( " + c['Type'] + ' ) \n'
+
+        '''for p in c['Parms']:
+            parm_name = p['Name']
+            parm_val = try_parse_parm_value(c['Name'], parm_name, p['Value'], message_stack)
+
+            print c['Type'] + '_' + parm_name + " = " + str(parm_val)
+            try_set_parm(vray_rop, s['Type'] + '_' + parm_name, parm_val, message_stack)'''
+
+        print '\n\n'
+
+    if len(message_stack) != 0:
+        print '\n\n\nLoad cameras terminated with: ' + str(len(message_stack)) + ' errors:\n'
+
+    for m in message_stack:
+        print m
+
+
+def load_lights(lights):
+    # loading settings
+    message_stack = list()
+    obj = hou.node('/obj')
+
+    print '\n\n\n#############################################'
+    print '##############  LOADING LIGHTS  #############'
+    print '#############################################\n\n'
+
+    for l in lights:
+        name = l['Name'].split('@', 1)[0]
+
+        # particular case for 'Max' types, need conversion
+        if l['Type'] == 'LightOmniMax':
+            l['Type'] = 'LightOmni'
+
+        print name + " ( " + l['Type'] + ' ) \n'
+
+        light = obj.node(name)
+        if light == None:
+            light = obj.createNode('VRayNode' + l['Type'])
+            light.setName(name)
+
+        for p in l['Parms']:
+            parm_name = p['Name']
+            parm_val = try_parse_parm_value(l['Name'], parm_name, p['Value'], message_stack)
+
+            print l['Type'] + '_' + parm_name + " = " + str(parm_val)
+            try_set_parm(light, parm_name, parm_val, message_stack)
+
+        print '\n\n'
+
+    if len(message_stack) != 0:
+        print '\n\n\nLoad lights terminated with: ' + str(len(message_stack)) + ' errors:\n'
+
+    for m in message_stack:
+        print m
+
+
 def get_render_channels_container(render_channels_rop):
     render_channel_container = None
     result = [child for child in render_channels_rop.children() if
@@ -179,6 +248,7 @@ def load_render_channels(renderChannels):
     if render_channels_rop == None:
         out = hou.node('/out')
         render_channels_rop = out.createNode('vray_render_channels', 'render_elements')
+        render_channels_rop.moveToGoodPosition()
 
     render_channels_container = get_render_channels_container(render_channels_rop)
 
@@ -335,6 +405,8 @@ def import_scene_from_clipboard():
 
                         load_settings(settings)
                         load_render_channels(renderChannels)
+                        load_cameras(cameras)
+                        load_lights(lights)
                         material_list = load_nodes(nodes)
                         load_materials(plugins, material_list)
 
