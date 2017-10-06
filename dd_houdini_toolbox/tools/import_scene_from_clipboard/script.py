@@ -108,12 +108,10 @@ def try_parse_parm_value(name, parm_name, parm_val, message_stack):
             result = hou.Vector3(eval(parm_val[6:]))
 
         else:
-            if not str(parm_val).__contains__('@') or not str(parm_val).__contains__('bitmapBuffer'):
-                result = eval(parm_val)
-            else:
-                pass
+            result = eval(parm_val)
 
     except:
+
         message_stack.append('Warning - cannot evaluating value: ' + str(
             parm_val) + ' on parameter: ' + parm_name + ' on node: ' + name)
 
@@ -137,7 +135,13 @@ def load_settings(settings):
     message_stack = list()
     vray_rop = get_vray_rop_node(message_stack)
 
-    if vray_rop != None:
+    if vray_rop == None:
+        out = hou.node('/out')
+        vray_rop = out.createNode('vray_renderer')
+    else:
+        for p in (vray_rop.parms()):
+            p.revertToDefaults()
+
         print '\n\n\n#############################################'
         print '#########  LOADING RENDER SETTINGS  #########'
         print '#############################################\n\n'
@@ -267,6 +271,9 @@ def load_render_channels(renderChannels):
             render_channel = render_channels_rop.createNode('VRayNode' + s['Type'])
             render_channel.setName(name)
             render_channels_container.setNextInput(render_channel)
+        else:
+            for p in (render_channel.parms()):
+                p.revertToDefaults()
 
         for p in s['Parms']:
             parm_name = p['Name']
@@ -384,17 +391,29 @@ def load_materials(plugins, material_list):
                 if node == None:
                     node = material.createNode('VRayNode' + n['Type'])
                     node.setName(normalize_name(n['Name']))
+                else:
+                    for p in (node.parms()):
+                        p.revertToDefaults()
 
                 material_output = get_material_output(material)
-                #material_output.setInput(0, node)
                 try_set_input(material_output, 'Material', node)
-
-                name = n['Name']
-                type = n['Type']
 
                 for p in n['Parms']:
                     parm_name = p['Name']
                     parm_val = p['Value']
+
+                    if '@' in parm_val or 'bitmapBuffer' in parm_val:
+                        for nn in plugins:
+                            if nn['Name'] == p['Name']:
+                                pass
+
+                    else:
+                        parm_val = try_parse_parm_value(n['Name'], parm_name, p['Value'], message_stack)
+
+                        print n['Type'] + '_' + parm_name + " = " + str(parm_val)
+                        try_set_parm(node, parm_name, parm_val, message_stack)
+
+                break
 
     if len(message_stack) != 0:
         print '\n\n\nLoad Scene materials terminated with: ' + str(len(message_stack)) + ' errors:\n'
