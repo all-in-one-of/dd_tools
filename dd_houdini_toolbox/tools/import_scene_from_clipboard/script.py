@@ -8,7 +8,7 @@ except ImportError:
 
 # black_listed_parms = ('roughness_model', 'option_use_roughness', 'subdivs_as_samples')
 
-global re, parse_vrscene_file, import_scene_from_clipboard, get_vray_rop_node, try_parse_parm_value, normalize_name, try_set_parm, load_settings, load_cameras, load_lights, load_render_channels, get_render_channels_container, load_nodes, load_materials, try_set_input, get_material_output
+global re, parse_vrscene_file, import_scene_from_clipboard, get_vray_rop_node, try_parse_parm_value, normalize_name, try_set_parm, load_settings, load_cameras, load_lights, load_render_channels, get_render_channels_container, load_nodes, load_materials, try_set_input, get_material_output, add_plugin_node, revert_parms_to_default
 
 
 def parse_vrscene_file(fname, plugins, cameras, lights, settings, renderChannels, nodes):
@@ -139,8 +139,7 @@ def load_settings(settings):
         out = hou.node('/out')
         vray_rop = out.createNode('vray_renderer')
     else:
-        for p in (vray_rop.parms()):
-            p.revertToDefaults()
+        revert_parms_to_default(vray_rop.parms())
 
         print '\n\n\n#############################################'
         print '#########  LOADING RENDER SETTINGS  #########'
@@ -272,8 +271,7 @@ def load_render_channels(renderChannels):
             render_channel.setName(name)
             render_channels_container.setNextInput(render_channel)
         else:
-            for p in (render_channel.parms()):
-                p.revertToDefaults()
+            revert_parms_to_default(render_channel.parms())
 
         for p in s['Parms']:
             parm_name = p['Name']
@@ -346,24 +344,88 @@ def get_material_output(material):
     return material_output
 
 
-def try_set_input(node, input, input_node):
-    error_count = 0
-    input_index = None
+def revert_parms_to_default(parms):
+    for i in range(len(parms), 0, -1):
+        parms[i - 1].revertToDefaults()
 
-    try:
-        input_index = node.inputIndex(input)
-    except:
-        print 'cannot find input: ' + str(input) + ' on node: ' + node.name()
-        error_count += 1
 
-    if input_index != None:
+def try_set_input(output_node, input_name, node, message_stack):
+    input_index = output_node.inputIndex(input_name)
+
+    if input_index != -1:
         try:
-            node.setInput(input_index, input_node)
+            output_node.setInput(input_index, node)
         except:
-            print 'cannot set input: ' + str(input) + ' from node: ' + node.name() + ' to node: ' + input_node.name()
-            error_count += 1
+            message_stack.append('cannot set input: ' + str(
+                input_name) + ' from node: ' + output_node.name() + ' to node: ' + node.name())
+    else:
+        message_stack.append('cannot find input: ' + str(input_name) + ' on node: ' + output_node.name())
 
-    return error_count
+
+def add_plugin_node(plugins, material, output_node, input_name, node_name, node_type, node_parms, message_stack):
+    node = material.node(normalize_name(node_name))
+    if node == None:
+        node = material.createNode('VRayNode' + node_type)
+        node.setName(normalize_name(node_name))
+    else:
+        revert_parms_to_default(node.parms())
+
+    try_set_input(output_node, input_name, node, message_stack)
+
+    print '\n\n( ' + normalize_name(node_name) + ' )'
+
+    for p in node_parms:
+        parm_name = p['Name']
+        parm_val = p['Value']
+
+        if '@' in parm_val or 'bitmapBuffer' in parm_val:
+
+            parm_val = try_parse_parm_value(node_name, parm_name, p['Value'], message_stack)
+
+            if node_type == 'MtlMulti' and parm_name == 'mtls_list':
+                parm_val = try_parse_parm_value(node_name, parm_name, p['Value'], message_stack)
+
+                try_set_parm(node, 'mtl_count', len(parm_val), message_stack)
+
+                for i in range(0, len(parm_val)):
+                    for nn in plugins:
+                        if nn['Name'] == parm_val[i]:
+                            add_plugin_node(plugins, material, node, 'mtl_' + str(i + 1), nn['Name'], nn['Type'],
+                                            nn['Parms'], message_stack)
+
+            elif node_type == 'BRDFLayered':
+
+                parm_val = parm_val[::-1]  # reversed
+
+                if parm_name == 'brdfs':
+
+                    try_set_parm(node, 'brdf_count', len(parm_val), message_stack)
+
+                    for i in range(0, len(parm_val)):
+                        for nn in plugins:
+                            if nn['Name'] == parm_val[i]:
+                                add_plugin_node(plugins, material, node, 'brdf_' + str(i + 1), nn['Name'], nn['Type'],
+                                                nn['Parms'], message_stack)
+
+                elif parm_name == 'weights':
+
+                    for i in range(0, len(parm_val)):
+                        for nn in plugins:
+                            if nn['Name'] == parm_val[i]:
+                                add_plugin_node(plugins, material, node, 'weight_' + str(i + 1), nn['Name'], nn['Type'],
+                                                nn['Parms'], message_stack)
+
+            else:
+                for nn in plugins:
+                    if nn['Name'] == parm_val:
+                        add_plugin_node(plugins, material, node, parm_name, nn['Name'], nn['Type'], nn['Parms'],
+                                        message_stack)
+
+        else:
+            parm_val = try_parse_parm_value(node_name, parm_name, p['Value'], message_stack)
+
+            print parm_name + " = " + str(parm_val)
+            try_set_parm(node, parm_name, parm_val, message_stack)
 
 
 def load_materials(plugins, material_list):
@@ -386,32 +448,13 @@ def load_materials(plugins, material_list):
 
         for n in plugins:
             if n['Name'] == m['Codename']:
-
-                node = material.node(normalize_name(n['Name']))
-                if node == None:
-                    node = material.createNode('VRayNode' + n['Type'])
-                    node.setName(normalize_name(n['Name']))
-                else:
-                    for p in (node.parms()):
-                        p.revertToDefaults()
-
                 material_output = get_material_output(material)
-                try_set_input(material_output, 'Material', node)
+                input_name = 'Material'
 
-                for p in n['Parms']:
-                    parm_name = p['Name']
-                    parm_val = p['Value']
+                add_plugin_node(plugins, material, material_output, input_name, n['Name'], n['Type'], n['Parms'],
+                                message_stack)
 
-                    if '@' in parm_val or 'bitmapBuffer' in parm_val:
-                        for nn in plugins:
-                            if nn['Name'] == p['Name']:
-                                pass
-
-                    else:
-                        parm_val = try_parse_parm_value(n['Name'], parm_name, p['Value'], message_stack)
-
-                        print n['Type'] + '_' + parm_name + " = " + str(parm_val)
-                        try_set_parm(node, parm_name, parm_val, message_stack)
+                material.layoutChildren()
 
                 break
 
@@ -445,8 +488,8 @@ def import_scene_from_clipboard():
 
                         load_settings(settings)
                         load_render_channels(renderChannels)
-                        load_cameras(cameras)
-                        load_lights(lights)
+                        # load_cameras(cameras)
+                        # load_lights(lights)
                         material_list = load_nodes(nodes)
                         load_materials(plugins, material_list)
 
