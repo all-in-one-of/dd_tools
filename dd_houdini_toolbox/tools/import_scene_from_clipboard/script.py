@@ -6,9 +6,10 @@ try:
 except ImportError:
     from Qt import QtWidgets, QtCore, QtGui
 
-# black_listed_parms = ('roughness_model', 'option_use_roughness', 'subdivs_as_samples')
+global re, material_list, black_listed_parms, parse_vrscene_file, import_scene_from_clipboard, get_vray_rop_node, try_parse_parm_value, normalize_name, try_set_parm, load_settings, load_cameras, load_lights, load_render_channels, get_render_channels_container, load_nodes, load_materials, try_set_input, get_material_output, add_plugin_node, revert_parms_to_default
 
-global re, parse_vrscene_file, import_scene_from_clipboard, get_vray_rop_node, try_parse_parm_value, normalize_name, try_set_parm, load_settings, load_cameras, load_lights, load_render_channels, get_render_channels_container, load_nodes, load_materials, try_set_input, get_material_output, add_plugin_node, revert_parms_to_default
+black_listed_parms = ('roughness_model', 'option_use_roughness', 'subdivs_as_samples', 'enableDeepOutput')
+material_list = list()
 
 
 def parse_vrscene_file(fname, plugins, cameras, lights, settings, renderChannels, nodes):
@@ -77,57 +78,58 @@ def get_vray_rop_node(message_stack):
 def try_parse_parm_value(name, parm_name, parm_val, message_stack):
     result = parm_val
 
-    try:
-        if parm_val.startswith('"') and parm_val.endswith('"'):
-            result = parm_val[1:-1]
-            if type == 'UVWGenEnvironment' and parm_name == 'mapping_type':
-                if parm_val == 'mirror_ball':
-                    result = 3
-                if parm_val == 'cubic':
-                    result = 1
-                if parm_val == 'angular':
-                    result = 3
-                if parm_val == 'spherical_vray':
-                    result = 6
+    if not '@' in str(parm_val) and not 'bitmapBuffer' in str(parm_val):
+        try:
+            if parm_val.startswith('"') and parm_val.endswith('"'):
+                result = parm_val[1:-1]
+                if type == 'UVWGenEnvironment' and parm_name == 'mapping_type':
+                    if parm_val == 'mirror_ball':
+                        result = 3
+                    if parm_val == 'cubic':
+                        result = 1
+                    if parm_val == 'angular':
+                        result = 3
+                    if parm_val == 'spherical_vray':
+                        result = 6
 
-        elif parm_val.startswith('Color'):
-            result = hou.Vector3(eval(parm_val[5:]))
+            elif parm_val.startswith('Color'):
+                result = hou.Vector3(eval(parm_val[5:]))
 
-        elif parm_val.startswith('AColor'):
-            result = hou.Vector4(eval(parm_val[6:]))
+            elif parm_val.startswith('AColor'):
+                result = hou.Vector4(eval(parm_val[6:]))
 
-        elif parm_val.startswith('ListInt'):
-            result = (re.match(r"ListInt\((.*?)\)", parm_val, re.MULTILINE | re.DOTALL)).group(
-                1).replace(' ', '').replace('\n', '').split(',')
+            elif parm_val.startswith('ListInt'):
+                result = (re.match(r"ListInt\((.*?)\)", parm_val, re.MULTILINE | re.DOTALL)).group(
+                    1).replace(' ', '').replace('\n', '').split(',')
 
-        elif parm_val.startswith('List'):
-            result = (re.match(r"List\((.*?)\)", parm_val, re.MULTILINE | re.DOTALL)).group(
-                1).replace(' ', '').replace('\n', '').split(',')
+            elif parm_val.startswith('List'):
+                result = (re.match(r"List\((.*?)\)", parm_val, re.MULTILINE | re.DOTALL)).group(
+                    1).replace(' ', '').replace('\n', '').split(',')
 
-        elif parm_val.startswith('Vector'):
-            result = hou.Vector3(eval(parm_val[6:]))
+            elif parm_val.startswith('Vector'):
+                result = hou.Vector3(eval(parm_val[6:]))
 
-        else:
-            result = eval(parm_val)
+            else:
+                result = eval(parm_val)
 
-    except:
-
-        message_stack.append('Warning - cannot evaluating value: ' + str(
-            parm_val) + ' on parameter: ' + parm_name + ' on node: ' + name)
+        except:
+            message_stack.append('Warning - cannot evaluating value: ' + str(
+                parm_val) + ' on parameter: ' + parm_name + ' on node: ' + name)
 
     return result
 
 
 def try_set_parm(node, parm_name, parm_val, message_stack):
-    try:
-        if isinstance(parm_val, hou.Vector3) or isinstance(parm_val, hou.Vector4):
-            node.parmTuple(parm_name).set(parm_val)
-        else:
-            node.parm(parm_name).set(parm_val)
+    if not parm_name in black_listed_parms:
+        try:
+            if isinstance(parm_val, hou.Vector3) or isinstance(parm_val, hou.Vector4):
+                node.parmTuple(parm_name).set(parm_val)
+            else:
+                node.parm(parm_name).set(parm_val)
 
-    except:
-        message_stack.append('Cannot set parm on ' + node.name() + ' ' + parm_name + ' = ' + str(
-            parm_val))
+        except:
+            message_stack.append('Cannot set parm on ' + node.name() + ' ' + parm_name + ' = ' + str(
+                parm_val))
 
 
 def load_settings(settings):
@@ -330,8 +332,6 @@ def load_nodes(nodes):
     for m in message_stack:
         print m
 
-    return material_list
-
 
 def get_material_output(material):
     material_output = None
@@ -428,7 +428,7 @@ def add_plugin_node(plugins, material, output_node, input_name, node_name, node_
             try_set_parm(node, parm_name, parm_val, message_stack)
 
 
-def load_materials(plugins, material_list):
+def load_materials(plugins):
     # loading materials
     message_stack = list()
     shop = hou.node('/shop')
@@ -480,6 +480,10 @@ def import_scene_from_clipboard():
 
     if lines.count > 1:
         if lines[0] == '#scene_export':
+
+            # clear console
+            print '\n' * 5000
+
             for line in lines[1:]:
                 ls = line.split(',', 1)
                 if len(ls) == 2:
@@ -490,13 +494,13 @@ def import_scene_from_clipboard():
                         load_render_channels(renderChannels)
                         # load_cameras(cameras)
                         # load_lights(lights)
-                        material_list = load_nodes(nodes)
-                        load_materials(plugins, material_list)
+                        load_nodes(nodes)
+                        load_materials(plugins)
 
-            print '\nscene was successfully imported'
+            print '\nScene import finished'
 
         else:
-            print '\nnothing to import...'
+            print '\nNothing to import...'
 
 
 import_scene_from_clipboard()
