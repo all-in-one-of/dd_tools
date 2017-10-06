@@ -6,10 +6,8 @@ try:
 except ImportError:
     from Qt import QtWidgets, QtCore, QtGui
 
-global re, material_list, black_listed_parms, parse_vrscene_file, import_scene_from_clipboard, get_vray_rop_node, try_parse_parm_value, normalize_name, try_set_parm, load_settings, load_cameras, load_lights, load_render_channels, get_render_channels_container, load_nodes, load_materials, try_set_input, get_material_output, add_plugin_node, revert_parms_to_default
 
-black_listed_parms = ('roughness_model', 'option_use_roughness', 'subdivs_as_samples', 'enableDeepOutput')
-material_list = list()
+global re, parse_vrscene_file, import_scene_from_clipboard, get_vray_rop_node, try_parse_parm_value, normalize_name, try_set_parm, load_settings, load_cameras, load_lights, load_render_channels, get_render_channels_container, load_nodes, load_materials, try_set_input, get_material_output, add_plugin_node, revert_parms_to_default
 
 
 def parse_vrscene_file(fname, plugins, cameras, lights, settings, renderChannels, nodes):
@@ -64,55 +62,56 @@ def normalize_name(name):
     return "_".join(filter(None, name.replace('@', '_').split('_')))
 
 
-def get_vray_rop_node(message_stack):
+def get_vray_rop_node():
     from vfh import vfh_rop
 
-    vrayRopNode = vfh_rop._getVrayRop()
+    vray_rop = vfh_rop._getVrayRop()
 
-    if vrayRopNode == None:
-        message_stack.append('Warning - cannot find vray rop node...')
+    if vray_rop == None:
+        out = hou.node('/out')
+        vray_rop = out.createNode('vray_renderer')
 
-    return vrayRopNode
+    return vray_rop
 
 
 def try_parse_parm_value(name, parm_name, parm_val, message_stack):
     result = parm_val
 
-    if not '@' in str(parm_val) and not 'bitmapBuffer' in str(parm_val):
-        try:
-            if parm_val.startswith('"') and parm_val.endswith('"'):
-                result = parm_val[1:-1]
-                if type == 'UVWGenEnvironment' and parm_name == 'mapping_type':
-                    if parm_val == 'mirror_ball':
-                        result = 3
-                    if parm_val == 'cubic':
-                        result = 1
-                    if parm_val == 'angular':
-                        result = 3
-                    if parm_val == 'spherical_vray':
-                        result = 6
+    try:
+        if parm_val.startswith('"') and parm_val.endswith('"'):
+            result = parm_val[1:-1]
+            if type == 'UVWGenEnvironment' and parm_name == 'mapping_type':
+                if parm_val == 'mirror_ball':
+                    result = 3
+                if parm_val == 'cubic':
+                    result = 1
+                if parm_val == 'angular':
+                    result = 3
+                if parm_val == 'spherical_vray':
+                    result = 6
 
-            elif parm_val.startswith('Color'):
-                result = hou.Vector3(eval(parm_val[5:]))
+        elif parm_val.startswith('Color'):
+            result = hou.Vector3(eval(parm_val[5:]))
 
-            elif parm_val.startswith('AColor'):
-                result = hou.Vector4(eval(parm_val[6:]))
+        elif parm_val.startswith('AColor'):
+            result = hou.Vector4(eval(parm_val[6:]))
 
-            elif parm_val.startswith('ListInt'):
-                result = (re.match(r"ListInt\((.*?)\)", parm_val, re.MULTILINE | re.DOTALL)).group(
-                    1).replace(' ', '').replace('\n', '').split(',')
+        elif parm_val.startswith('ListInt'):
+            result = (re.match(r"ListInt\((.*?)\)", parm_val, re.MULTILINE | re.DOTALL)).group(
+                1).replace(' ', '').replace('\n', '').split(',')
 
-            elif parm_val.startswith('List'):
-                result = (re.match(r"List\((.*?)\)", parm_val, re.MULTILINE | re.DOTALL)).group(
-                    1).replace(' ', '').replace('\n', '').split(',')
+        elif parm_val.startswith('List'):
+            result = (re.match(r"List\((.*?)\)", parm_val, re.MULTILINE | re.DOTALL)).group(
+                1).replace(' ', '').replace('\n', '').split(',')
 
-            elif parm_val.startswith('Vector'):
-                result = hou.Vector3(eval(parm_val[6:]))
+        elif parm_val.startswith('Vector'):
+            result = hou.Vector3(eval(parm_val[6:]))
 
-            else:
-                result = eval(parm_val)
+        else:
+            result = eval(parm_val)
 
-        except:
+    except:
+        if not '@' in str(parm_val) and not 'bitmapBuffer' in str(parm_val):
             message_stack.append('Warning - cannot evaluating value: ' + str(
                 parm_val) + ' on parameter: ' + parm_name + ' on node: ' + name)
 
@@ -120,6 +119,8 @@ def try_parse_parm_value(name, parm_name, parm_val, message_stack):
 
 
 def try_set_parm(node, parm_name, parm_val, message_stack):
+    global black_listed_parms
+
     if not parm_name in black_listed_parms:
         try:
             if isinstance(parm_val, hou.Vector3) or isinstance(parm_val, hou.Vector4):
@@ -135,25 +136,21 @@ def try_set_parm(node, parm_name, parm_val, message_stack):
 def load_settings(settings):
     # loading settings
     message_stack = list()
-    vray_rop = get_vray_rop_node(message_stack)
 
-    if vray_rop == None:
-        out = hou.node('/out')
-        vray_rop = out.createNode('vray_renderer')
-    else:
-        revert_parms_to_default(vray_rop.parms())
+    vray_rop = get_vray_rop_node()
+    revert_parms_to_default(vray_rop.parms(), ('render_network_render_channels'))
 
-        print '\n\n\n#############################################'
-        print '#########  LOADING RENDER SETTINGS  #########'
-        print '#############################################\n\n'
+    print '\n\n\n#############################################'
+    print '#########  LOADING RENDER SETTINGS  #########'
+    print '#############################################\n\n'
 
-        for s in settings:
-            for p in s['Parms']:
-                parm_name = p['Name']
-                parm_val = try_parse_parm_value(s['Name'], parm_name, p['Value'], message_stack)
+    for s in settings:
+        for p in s['Parms']:
+            parm_name = p['Name']
+            parm_val = try_parse_parm_value(s['Name'], parm_name, p['Value'], message_stack)
 
-                print s['Type'] + '_' + parm_name + " = " + str(parm_val)
-                try_set_parm(vray_rop, s['Type'] + '_' + parm_name, parm_val, message_stack)
+            print s['Type'] + '_' + parm_name + " = " + str(parm_val)
+            try_set_parm(vray_rop, s['Type'] + '_' + parm_name, parm_val, message_stack)
 
     if len(message_stack) != 0:
         print '\n\n\nLoad Render Settings terminated with: ' + str(len(message_stack)) + ' errors:\n'
@@ -235,6 +232,7 @@ def get_render_channels_container(render_channels_rop):
     render_channel_container = None
     result = [child for child in render_channels_rop.children() if
               child.type().name() == 'VRayNodeRenderChannelsContainer']
+
     if len(result) > 0:
         render_channel_container = result[0]
     else:
@@ -247,13 +245,14 @@ def load_render_channels(renderChannels):
     # loading render channels
     message_stack = list()
 
-    vray_rop = get_vray_rop_node(message_stack)
+    vray_rop = get_vray_rop_node()
     render_channels_rop = hou.node(vray_rop.parm('render_network_render_channels').eval())
 
     if render_channels_rop == None:
         out = hou.node('/out')
         render_channels_rop = out.createNode('vray_render_channels', 'render_elements')
         render_channels_rop.moveToGoodPosition()
+        vray_rop.parm('render_network_render_channels').set(render_channels_rop.path())
 
     render_channels_container = get_render_channels_container(render_channels_rop)
 
@@ -292,12 +291,10 @@ def load_render_channels(renderChannels):
         print m
 
 
-def load_nodes(nodes):
+def load_nodes(nodes, materials):
     # loading nodes
     message_stack = list()
     obj = hou.node('/obj')
-
-    material_list = list()
 
     print '\n\n\n#############################################'
     print '###########  LOADING SCENE NODES  ###########'
@@ -308,7 +305,7 @@ def load_nodes(nodes):
         material = n['Parms'][[i for i, s in enumerate(n['Parms']) if 'material' in s['Name']][0]]['Value']
 
         material_name = normalize_name(material.split('@', 1)[0])
-        material_list.append({'Name': material_name, 'Codename': material})
+        materials.append({'Name': material_name, 'Codename': material})
 
         node = obj.node(normalize_name(name))
         if node == None:
@@ -344,9 +341,10 @@ def get_material_output(material):
     return material_output
 
 
-def revert_parms_to_default(parms):
+def revert_parms_to_default(parms, exclude_parm_list=()):
     for i in range(len(parms), 0, -1):
-        parms[i - 1].revertToDefaults()
+        if not parms[i - 1].name() in exclude_parm_list:
+            parms[i - 1].revertToDefaults()
 
 
 def try_set_input(output_node, input_name, node, message_stack):
@@ -377,13 +375,11 @@ def add_plugin_node(plugins, material, output_node, input_name, node_name, node_
     for p in node_parms:
         parm_name = p['Name']
         parm_val = p['Value']
+        parm_val = try_parse_parm_value(node_name, parm_name, p['Value'], message_stack)
 
-        if '@' in parm_val or 'bitmapBuffer' in parm_val:
+        if node_type == 'MtlMulti':
 
-            parm_val = try_parse_parm_value(node_name, parm_name, p['Value'], message_stack)
-
-            if node_type == 'MtlMulti' and parm_name == 'mtls_list':
-                parm_val = try_parse_parm_value(node_name, parm_name, p['Value'], message_stack)
+            if parm_name == 'mtls_list':
 
                 try_set_parm(node, 'mtl_count', len(parm_val), message_stack)
 
@@ -393,42 +389,49 @@ def add_plugin_node(plugins, material, output_node, input_name, node_name, node_
                             add_plugin_node(plugins, material, node, 'mtl_' + str(i + 1), nn['Name'], nn['Type'],
                                             nn['Parms'], message_stack)
 
-            elif node_type == 'BRDFLayered':
+            elif parm_name == 'ids_list':
+
+                pass
+
+        elif node_type == 'BRDFLayered':
+
+
+
+            if parm_name == 'brdfs':
+
+                try_set_parm(node, 'brdf_count', len(parm_val), message_stack)
 
                 parm_val = parm_val[::-1]  # reversed
 
-                if parm_name == 'brdfs':
+                for i in range(0, len(parm_val)):
+                    for nn in plugins:
+                        if nn['Name'] == parm_val[i]:
+                            add_plugin_node(plugins, material, node, 'brdf_' + str(i + 1), nn['Name'], nn['Type'],
+                                            nn['Parms'], message_stack)
 
-                    try_set_parm(node, 'brdf_count', len(parm_val), message_stack)
+            elif parm_name == 'weights':
 
-                    for i in range(0, len(parm_val)):
-                        for nn in plugins:
-                            if nn['Name'] == parm_val[i]:
-                                add_plugin_node(plugins, material, node, 'brdf_' + str(i + 1), nn['Name'], nn['Type'],
-                                                nn['Parms'], message_stack)
+                parm_val = parm_val[::-1]  # reversed
 
-                elif parm_name == 'weights':
+                for i in range(0, len(parm_val)):
+                    for nn in plugins:
+                        if nn['Name'] == parm_val[i]:
+                            add_plugin_node(plugins, material, node, 'weight_' + str(i + 1), nn['Name'], nn['Type'],
+                                            nn['Parms'], message_stack)
 
-                    for i in range(0, len(parm_val)):
-                        for nn in plugins:
-                            if nn['Name'] == parm_val[i]:
-                                add_plugin_node(plugins, material, node, 'weight_' + str(i + 1), nn['Name'], nn['Type'],
-                                                nn['Parms'], message_stack)
-
-            else:
-                for nn in plugins:
-                    if nn['Name'] == parm_val:
-                        add_plugin_node(plugins, material, node, parm_name, nn['Name'], nn['Type'], nn['Parms'],
-                                        message_stack)
+        elif '@' in str(parm_val) or 'bitmapBuffer' in str(parm_val):
+            for nn in plugins:
+                if nn['Name'] == str(parm_val):
+                    add_plugin_node(plugins, material, node, parm_name, nn['Name'], nn['Type'], nn['Parms'],
+                                    message_stack)
 
         else:
-            parm_val = try_parse_parm_value(node_name, parm_name, p['Value'], message_stack)
 
             print parm_name + " = " + str(parm_val)
             try_set_parm(node, parm_name, parm_val, message_stack)
 
 
-def load_materials(plugins):
+def load_materials(plugins, materials):
     # loading materials
     message_stack = list()
     shop = hou.node('/shop')
@@ -437,7 +440,7 @@ def load_materials(plugins):
     print '#########  LOADING SCENE MATERIALS  #########'
     print '#############################################\n\n'
 
-    for m in material_list:
+    for m in materials:
 
         material = shop.node(m['Name'])
         if material == None:
@@ -471,18 +474,21 @@ def import_scene_from_clipboard():
     lines = text.splitlines()
 
     plugins = list()
-    connections = list()
     cameras = list()
     lights = list()
     settings = list()
     renderChannels = list()
     nodes = list()
+    materials = list()
+
+    global black_listed_parms
+    black_listed_parms = ('roughness_model', 'option_use_roughness', 'subdivs_as_samples', 'enableDeepOutput')
+
+    # clear console
+    print '\n' * 5000
 
     if lines.count > 1:
         if lines[0] == '#scene_export':
-
-            # clear console
-            print '\n' * 5000
 
             for line in lines[1:]:
                 ls = line.split(',', 1)
@@ -494,8 +500,8 @@ def import_scene_from_clipboard():
                         load_render_channels(renderChannels)
                         # load_cameras(cameras)
                         # load_lights(lights)
-                        load_nodes(nodes)
-                        load_materials(plugins)
+                        load_nodes(nodes, materials)
+                        load_materials(plugins, materials)
 
             print '\nScene import finished'
 
