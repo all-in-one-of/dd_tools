@@ -407,7 +407,10 @@ def add_plugin_node(plugins, material, output_node, input_name, node_name, node_
             if parm_name == 'mtls_list':
 
                 # insert mtlid_gen // necessary for material_ids generation
-                node.insertParmGenerator('mtlid_gen', hou.vopParmGenType.Parameter, False)
+                mtlid_gen = material.node(output_node.name() + '_mtlid_gen')
+                if mtlid_gen == None:
+                    mtlid_gen = node.insertParmGenerator('mtlid_gen', hou.vopParmGenType.Parameter, False)
+                    mtlid_gen.setName(output_node.name() + '_mtlid_gen')
 
                 try_set_parm(node, 'mtl_count', len(parm_val), message_stack)
 
@@ -508,7 +511,7 @@ def import_scene_from_clipboard():
     materials = list()
 
     global black_listed_parms
-    black_listed_parms = ('roughness_model', 'option_use_roughness', 'subdivs_as_samples', 'enableDeepOutput')
+    black_listed_parms = ('roughness_model', 'option_use_roughness', 'subdivs_as_samples', 'enableDeepOutput', 'adv_exposure_mode', 'adv_printer_lights_per')
 
     # clear console
     print '\n' * 5000
