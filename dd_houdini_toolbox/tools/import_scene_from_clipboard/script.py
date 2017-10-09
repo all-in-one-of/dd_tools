@@ -6,7 +6,6 @@ try:
 except ImportError:
     from Qt import QtWidgets, QtCore, QtGui
 
-
 global re, parse_vrscene_file, import_scene_from_clipboard, get_vray_rop_node, try_parse_parm_value, normalize_name, try_set_parm, load_settings, load_cameras, load_lights, load_render_channels, get_render_channels_container, load_nodes, load_materials, try_set_input, get_material_output, add_plugin_node, revert_parms_to_default
 
 
@@ -90,6 +89,13 @@ def try_parse_parm_value(name, parm_name, parm_val, message_stack):
                 if parm_val == 'spherical_vray':
                     result = 6
 
+        elif parm_val.startswith('Transform'):
+            # Transform(Matrix(Vector(1, 0, 0), Vector(0, 1, 0), Vector(0, 0, 1)), Vector(0, 0, 0))
+            result = re.match(r"Transform\(Matrix\((.*?.*)\), (.*?.*)\)", parm_val)
+            result = (hou.Matrix3(eval('(' + result.group(1).replace('Vector', '') + ')')),
+                      hou.Vector3(eval(result.group(2).replace('Vector', ''))))
+            print result
+
         elif parm_val.startswith('Color'):
             result = hou.Vector3(eval(parm_val[5:]))
 
@@ -112,7 +118,7 @@ def try_parse_parm_value(name, parm_name, parm_val, message_stack):
 
     except:
         if not '@' in str(parm_val) and not 'bitmapBuffer' in str(parm_val):
-            message_stack.append('Warning - cannot evaluating value: ' + str(
+            message_stack.append('Warning - cannot parsing value: ' + str(
                 parm_val) + ' on parameter: ' + parm_name + ' on node: ' + name)
 
     return result
@@ -138,7 +144,7 @@ def load_settings(settings):
     message_stack = list()
 
     vray_rop = get_vray_rop_node()
-    revert_parms_to_default(vray_rop.parms(), ('render_network_render_channels'))
+    revert_parms_to_default(vray_rop.parms(), ('render_camera', 'render_network_render_channels', 'render_network_environment'))
 
     print '\n\n\n#############################################'
     print '#########  LOADING RENDER SETTINGS  #########'
@@ -377,9 +383,31 @@ def add_plugin_node(plugins, material, output_node, input_name, node_name, node_
         parm_val = p['Value']
         parm_val = try_parse_parm_value(node_name, parm_name, p['Value'], message_stack)
 
-        if node_type == 'MtlMulti':
+        if node_type == 'BRDFBump' and parm_name == 'bump_tex':
+            parm_name = 'bump_tex_color'  # to test !...
+
+        if node_type == 'UVWGenChannel' and parm_name == 'uvw_transform':
+            matrix4 = hou.Matrix4(parm_val[0])
+            result = matrix4.explode(transform_order='srt', rotate_order='xyz', pivot=parm_val[1])
+
+            xform = material.node(output_node.name() + '_makexform')
+            if xform == None:
+                xform = material.createNode('makexform')
+                xform.setName(output_node.name() + '_makexform')
+
+            try_set_parm(xform, 'trans', result['translate'], message_stack)
+            try_set_parm(xform, 'rot', result['rotate'], message_stack)
+            try_set_parm(xform, 'scale', result['scale'], message_stack)
+            try_set_parm(xform, 'pivot', result['shear'], message_stack)
+
+            try_set_input(node, 'uvw_transform', xform, message_stack)
+
+        elif node_type == 'MtlMulti':
 
             if parm_name == 'mtls_list':
+
+                # insert mtlid_gen // necessary for material_ids generation
+                node.insertParmGenerator('mtlid_gen', hou.vopParmGenType.Parameter, False)
 
                 try_set_parm(node, 'mtl_count', len(parm_val), message_stack)
 
@@ -394,8 +422,6 @@ def add_plugin_node(plugins, material, output_node, input_name, node_name, node_
                 pass
 
         elif node_type == 'BRDFLayered':
-
-
 
             if parm_name == 'brdfs':
 
