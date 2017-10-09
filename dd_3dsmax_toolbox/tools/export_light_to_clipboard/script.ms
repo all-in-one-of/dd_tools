@@ -2,12 +2,24 @@ fn upperfirst _s = ((toUpper _s[1]) + (substring _s 2 _s.count))
 
 fn maxtohoudinitransform _t = ( matrix3 [1,0,0] [0,0,1] [0,-1,0] [0,0,0] ) * _t * inverse( matrix3 [1,0,0] [0,0,1] [0,-1,0] [0,0,0] )
 
+fn maxtohoudinilighttransform _t =  ( preRotateX ( matrix3 [1,0,0] [0,0,1] [0,-1,0] [0,0,0] ) -90 ) * _t * inverse( matrix3 [1,0,0] [0,0,1] [0,-1,0] [0,0,0] )
+
 fn maxtohoudinigettransforms _o _step:1 _substeps:1 =
 (
     _result = #()
     for _t = animationrange.start.frame to animationrange.end.frame by _step / _substeps do
     (
         append _result #( _t, ( maxtohoudinitransform ( at time _t _o.transform ) ) )
+    )
+    _result
+)
+
+fn maxtohoudinigetlighttransforms _o _step:1 _substeps:1 =
+(
+    _result = #()
+    for _t = animationrange.start.frame to animationrange.end.frame by _step / _substeps do
+    (
+        append _result #( _t, ( maxtohoudinilighttransform ( at time _t _o.transform ) ) )
     )
     _result
 )
@@ -60,7 +72,7 @@ fn formatTuple _tuple =
 
 fn exportlighttoclipboard _o =
 (
-    _t = maxtohoudinigettransforms _o
+    _t = maxtohoudinigetlighttransforms _o
 
     _p_x = for i in _t collect ( #( i[1], i[2].position.x / 100. ) )
     _p_y = for i in _t collect ( #( i[1], i[2].position.y / 100. ) )
@@ -170,7 +182,7 @@ fn exportlighttoclipboard _o =
                 _script += "directional," + _o.lightDistribution as string + "\n"
                 _script += "ignoreLightNormals," + upperfirst( _o.ignoreNormals as string ) + "\n"
                 _script += "doubleSided," + upperfirst( _o.DoubleSided as string ) + "\n"
-                _script += "lightPortal," + (get_lightPortal()) as string + "\n"
+                _script += "lightPortal," + (get_lightPortal _o) as string + "\n"
                 _script += "noDecay," + upperfirst( _o.noDecay as string ) + "\n"
             )
             1 : (
@@ -196,7 +208,7 @@ fn exportlighttoclipboard _o =
                 --pick mesh a faire
                 _script += "ignoreLightNormals," + upperfirst( _o.ignoreNormals as string ) + "\n"
                 _script += "doubleSided," + upperfirst( _o.DoubleSided as string ) + "\n"
-                _script += "lightPortal," + (get_lightPortal()) as string + "\n"
+                _script += "lightPortal," + (get_lightPortal _o) as string + "\n"
                 _script += "noDecay," + upperfirst( _o.noDecay as string ) + "\n"
             )
             4 : (
@@ -207,7 +219,7 @@ fn exportlighttoclipboard _o =
                 _script += "directional," + _o.lightDistribution as string + "\n"
                 _script += "ignoreLightNormals," + _o.ignoreNormals as string + "\n"
                 _script += "doubleSided," + upperfirst( _o.DoubleSided as string ) + "\n"
-                _script += "lightPortal," + (get_lightPortal()) as string + "\n"
+                _script += "lightPortal," + (get_lightPortal _o) as string + "\n"
                 _script += "noDecay," + upperfirst( _o.noDecay as string ) + "\n"
             )
         )
