@@ -146,6 +146,7 @@ if lines[0].startswith('#abc_export'):
                     vraypoxy.parm('reload').pressButton()
                     #vraypoxy.parm('scale').set(0.01)
                     vraypoxy.parm('scale').setExpression('ch("../xform1/scale")')
+                    vraypoxy.parm('first_map_channel').set(1)
                     #vraypoxy.moveToGoodPosition()
                     vraypoxy.setRenderFlag(True)
 
