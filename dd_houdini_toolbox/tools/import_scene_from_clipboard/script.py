@@ -1,22 +1,32 @@
 import hou
 import re
+import os.path
 
 try:
     from PyQt5 import QtWidgets, QtCore, QtGui
 except ImportError:
     from Qt import QtWidgets, QtCore, QtGui
 
-global re, setTimelineRange, parse_vrscene_file, import_scene_from_clipboard, get_vray_rop_node, try_parse_parm_value, normalize_name, try_set_parm, load_settings, load_cameras, load_lights, load_render_channels, get_render_channels_container, load_nodes, load_materials, try_set_input, get_material_output, add_plugin_node, revert_parms_to_default, load_environments, get_environment_settings, find_or_create_user_color
+global re, setTimelineRange, parse_vrscene_file, import_scene_from_clipboard, get_vray_rop_node, try_parse_parm_value, normalize_name, try_create_node, try_set_parm, load_settings, load_cameras, load_lights, load_render_channels, get_render_channels_container, load_nodes, load_materials, try_set_input, get_material_output, add_plugin_node, revert_parms_to_default, load_environments, get_environment_settings, find_or_create_user_color
 
 
 def parse_vrscene_file(fname, plugins, cameras, lights, settings, renderChannels, nodes, environments):
-    regex = r"(.*?)\ (.*?)\ {(.*?)\}"
     content = None
 
     with open(fname, 'r') as content_file:
         content = re.sub(re.compile("//.*?\n"), "", content_file.read())  # load content without comments
 
-    matches = re.finditer(regex, content, re.MULTILINE | re.DOTALL)
+
+    matches = re.finditer(r'\#include\ \"(.*?)\"\n', content, re.MULTILINE | re.DOTALL)
+    for matchNum, match in enumerate(matches):
+        fname = match.group(1).strip()
+        if os.path.isfile(fname):
+            with open(fname, 'r') as content_file:
+                sub_content = re.sub(re.compile("//.*?\n"), "", content_file.read())  # load content without comments
+            content += sub_content
+
+
+    matches = re.finditer(r'(.*?)\ (.*?)\ {(.*?)\}', content, re.MULTILINE | re.DOTALL)
 
     for matchNum, match in enumerate(matches):
         type = match.group(1).strip()
@@ -271,6 +281,20 @@ def get_render_channels_container(render_channels_rop):
         render_channel_container.moveToGoodPosition()
     return render_channel_container
 
+def try_create_node(parent, type, name, message_stack):
+    node = None
+    try:
+        node = parent.createNode(type)
+    except:
+        message_stack.append('cannot create node name:' + name + ' type: ' + str(type))
+
+    if node != None and name != '':
+        try:
+            node.setName(name)
+        except:
+            message_stack.append('cannot set name:' + name)
+
+    return node
 
 def load_render_channels(renderChannels):
     # loading render channels
@@ -285,7 +309,13 @@ def load_render_channels(renderChannels):
         render_channels_rop.moveToGoodPosition()
         vray_rop.parm('render_network_render_channels').set(render_channels_rop.path())
 
+    for child in render_channels_rop.children():
+        if child.type().name() != 'VRayNodeRenderChannelsContainer':
+            child.destroy()
+
     render_channels_container = get_render_channels_container(render_channels_rop)
+
+
 
     print '\n\n\n#############################################'
     print '#########  LOADING RENDER CHANNELS  #########'
@@ -294,22 +324,27 @@ def load_render_channels(renderChannels):
     for s in renderChannels:
 
         name = s['Name'].split('@', 1)[0]
+        type = s['Type']
 
         print name + " ( " + s['Type'] + ' ) \n'
 
-        render_channel = render_channels_rop.node(name)
-        if render_channel == None:
-            render_channel = render_channels_rop.createNode('VRayNode' + s['Type'])
-            render_channel.setName(name)
-            render_channels_container.setNextInput(render_channel)
-        else:
-            revert_parms_to_default(render_channel.parms())
+        render_channel = try_create_node(render_channels_rop, 'VRayNode' + s['Type'], name, message_stack)
 
-        for p in s['Parms']:
-            parm_name = p['Name']
-            parm_val = try_parse_parm_value(s['Name'], parm_name, p['Value'], message_stack)
-            print parm_name + " = " + str(parm_val)
-            try_set_parm(render_channel, parm_name, parm_val, message_stack)
+        if render_channel != None:
+            render_channels_container.setNextInput(render_channel)
+
+            for p in s['Parms']:
+                parm_name = p['Name']
+                parm_val = try_parse_parm_value(s['Name'], parm_name, p['Value'], message_stack)
+
+                if type == 'RenderChannelColor' and parm_name == 'alias':
+                    parm_val -= 100 # item numbering from max starts at 100
+
+                if type == 'RenderChannelZDepth' and ( parm_name == 'depth_black' or parm_name == 'depth_white' ):
+                    parm_val *= 0.01 # metric values ! need convertion
+
+                print parm_name + " = " + str(parm_val)
+                try_set_parm(render_channel, parm_name, parm_val, message_stack)
 
         print '\n\n'
 
@@ -410,6 +445,9 @@ def add_plugin_node(plugins, material, output_node, input_name, node_name, node_
 
         if node_type == 'BRDFBump' and parm_name == 'bump_tex':
             parm_name = 'bump_tex_color'  # to test !...
+
+        if node_type == 'BRDFVRayMtl' and parm_name == 'brdf_type':
+            if parm_val == 4: parm_val = 3  # need this conversion because of the difference between max and houdini menu list
 
         if node_type == 'UVWGenChannel' and parm_name == 'uvw_transform':
             matrix4 = hou.Matrix4(parm_val[0])
@@ -580,7 +618,6 @@ def load_environments(plugins, environments):
     print '\n\n'
 
     environment_rop.layoutChildren()
-
 
     if len(message_stack) != 0:
         print '\n\n\nLoad Scene environment terminated with: ' + str(len(message_stack)) + ' errors:\n'
