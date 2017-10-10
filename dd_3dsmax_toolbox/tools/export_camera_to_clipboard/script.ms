@@ -89,7 +89,7 @@ fn exportcameratoclipboard _o =
     _script = "#camera_export," + ( framerate as float ) as string + ",[" + ( animationrange.start.frame as integer ) as string + ", " + ( animationrange.end.frame as integer ) as string + "]\n\n"
 
     --name
-    _script += "name,'" + toLower(_o.name) + "'\n"
+    _script += "name,'" + _o.name + "'\n"
 
     --type
     --_script += "type,'" + substituteString (toLower((classOf _o) as string)) "camera" "" + "'\n"
