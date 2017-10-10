@@ -12,16 +12,20 @@ fn writeVRScenefiles _start:currentframe _end:currentframe =
 
         _script += "filename," + _vrscenefile + "\n"
 
-    fs = openFile _vrscenefile mode:"a"
 
-    _rendercam = "cam1"
-
-    if getActiveCamera() != undefined do _rendercam = (getActiveCamera()).name
-
-    format "CustomSettings camera_settings {\n  camera=\"%\"\n}" _rendercam to:fs
-    close fs
 
     setclipboardText _script
+
+    global _fs
+    try(
+        _fs = openFile _vrscenefile mode:"a"
+        _rendercam = if getActiveCamera() != undefined then (getActiveCamera()).name else ""
+        _fps = (framerate as float) as string
+        _range = [animationrange.start.frame as integer , animationrange.end.frame as integer] as string
+
+        format "CustomSettings scene_settings {\n  camera=\"%\";\n  fps=%;\n  range=%;\n}" _rendercam _fps _range to:_fs
+    )catch(print "cannot adding CustomSettings to .vrscene file...")
+    close _fs
 
     print "scene successfully exported"
 )
