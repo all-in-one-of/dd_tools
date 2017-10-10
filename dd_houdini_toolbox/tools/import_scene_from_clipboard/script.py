@@ -6,10 +6,10 @@ try:
 except ImportError:
     from Qt import QtWidgets, QtCore, QtGui
 
-global re, parse_vrscene_file, import_scene_from_clipboard, get_vray_rop_node, try_parse_parm_value, normalize_name, try_set_parm, load_settings, load_cameras, load_lights, load_render_channels, get_render_channels_container, load_nodes, load_materials, try_set_input, get_material_output, add_plugin_node, revert_parms_to_default
+global re, setTimelineRange, parse_vrscene_file, import_scene_from_clipboard, get_vray_rop_node, try_parse_parm_value, normalize_name, try_set_parm, load_settings, load_cameras, load_lights, load_render_channels, get_render_channels_container, load_nodes, load_materials, try_set_input, get_material_output, add_plugin_node, revert_parms_to_default, load_environments, get_environment_settings, find_or_create_user_color
 
 
-def parse_vrscene_file(fname, plugins, cameras, lights, settings, renderChannels, nodes):
+def parse_vrscene_file(fname, plugins, cameras, lights, settings, renderChannels, nodes, environments):
     regex = r"(.*?)\ (.*?)\ {(.*?)\}"
     content = None
 
@@ -22,7 +22,7 @@ def parse_vrscene_file(fname, plugins, cameras, lights, settings, renderChannels
         type = match.group(1).strip()
 
         # do not catch parameters from GeomStaticMesh !
-        if type != 'GeomStaticMesh' and type != 'RenderView' and type != 'Filter' and type != 'SettingsEnvironment':
+        if type != 'GeomStaticMesh' and type != 'RenderView' and type != 'Filter':
 
             name = match.group(2).strip()
             parms = list()
@@ -35,6 +35,12 @@ def parse_vrscene_file(fname, plugins, cameras, lights, settings, renderChannels
 
             if type == 'Node':
                 nodes.append({'Type': type, 'Name': name, 'Parms': parms})
+
+            # catch vray environment
+            elif 'SettingsEnvironment' in type:
+                for p in parms:
+                    if '_tex' in p['Name']:
+                        environments.append(p)
 
             # catch vray render channels
             elif 'RenderChannel' in type:
@@ -139,12 +145,19 @@ def try_set_parm(node, parm_name, parm_val, message_stack):
                 parm_val))
 
 
+def setTimelineRange(start, end):
+    setGobalFrangeExpr = 'tset `(%d-1)/$FPS` `%d/$FPS`' % (start, end)
+    hou.hscript(setGobalFrangeExpr)
+    hou.playbar.setPlaybackRange(start, end)
+
+
 def load_settings(settings):
     # loading settings
     message_stack = list()
 
     vray_rop = get_vray_rop_node()
-    revert_parms_to_default(vray_rop.parms(), ('render_camera', 'render_network_render_channels', 'render_network_environment'))
+    revert_parms_to_default(vray_rop.parms(),
+                            ('render_camera', 'render_network_render_channels', 'render_network_environment'))
 
     print '\n\n\n#############################################'
     print '#########  LOADING RENDER SETTINGS  #########'
@@ -155,8 +168,20 @@ def load_settings(settings):
             parm_name = p['Name']
             parm_val = try_parse_parm_value(s['Name'], parm_name, p['Value'], message_stack)
 
-            print s['Type'] + '_' + parm_name + " = " + str(parm_val)
-            try_set_parm(vray_rop, s['Type'] + '_' + parm_name, parm_val, message_stack)
+            if s['Type'] == 'CustomSettings':
+                print parm_name + " = " + str(parm_val)
+
+                if parm_name == 'camera':
+                    if parm_val != '':
+                        try_set_parm(vray_rop, 'render_camera', '/obj/' + parm_val, message_stack)
+                elif parm_name == 'fps':
+                    hou.setFps(parm_val)
+                elif parm_name == 'range':
+                    setTimelineRange(parm_val[0], parm_val[1])
+
+            else:
+                print s['Type'] + '_' + parm_name + " = " + str(parm_val)
+                try_set_parm(vray_rop, s['Type'] + '_' + parm_name, parm_val, message_stack)
 
     if len(message_stack) != 0:
         print '\n\n\nLoad Render Settings terminated with: ' + str(len(message_stack)) + ' errors:\n'
@@ -497,6 +522,73 @@ def load_materials(plugins, materials):
         print m
 
 
+def get_environment_settings(environment_rop):
+    render_environment = None
+    result = [child for child in environment_rop.children() if
+              child.type().name() == 'VRayNodeSettingsEnvironment']
+
+    if len(result) > 0:
+        render_environment = result[0]
+    else:
+        render_environment = environment_rop.createNode('VRayNodeSettingsEnvironment')
+        render_environment.moveToGoodPosition()
+    return render_environment
+
+
+def find_or_create_user_color(environment_settings, environment_rop, parm_name, parm_val, message_stack):
+    user_color = None
+
+    for child in environment_rop.children():
+        if child.type().name() == 'VRayNodeTexUserColor':
+            if hou.Vector4(child.parmTuple('default_color').eval()) == parm_val:
+                user_color = child
+                break
+
+    if user_color == None:
+        user_color = environment_rop.createNode('VRayNodeTexUserColor')
+        try_set_parm(user_color, 'default_color', parm_val, message_stack)
+
+    try_set_input(environment_settings, parm_name, user_color, message_stack)
+
+
+def load_environments(plugins, environments):
+    # loading environment
+    message_stack = list()
+
+    vray_rop = get_vray_rop_node()
+    environment_rop = hou.node(vray_rop.parm('render_network_environment').eval())
+
+    if environment_rop == None:
+        out = hou.node('/out')
+        environment_rop = out.createNode('vray_environment', 'env')
+        environment_rop.moveToGoodPosition()
+        vray_rop.parm('render_network_environment').set(environment_rop.path())
+
+    environment_settings = get_environment_settings(environment_rop)
+
+    print '\n\n\n#############################################'
+    print '########  LOADING SCENE ENVIRONMENT  ########'
+    print '#############################################\n\n'
+
+    for p in environments:
+        parm_name = p['Name']
+        parm_val = try_parse_parm_value(environment_settings, parm_name, p['Value'], message_stack)
+        print parm_name + " = " + str(parm_val)
+        if isinstance(parm_val, hou.Vector4):
+            find_or_create_user_color(environment_settings, environment_rop, parm_name, parm_val, message_stack)
+
+    print '\n\n'
+
+    environment_rop.layoutChildren()
+
+
+    if len(message_stack) != 0:
+        print '\n\n\nLoad Scene environment terminated with: ' + str(len(message_stack)) + ' errors:\n'
+
+    for m in message_stack:
+        print m
+
+
 def import_scene_from_clipboard():
     clipboard = QtWidgets.QApplication.clipboard()
     text = clipboard.text()
@@ -509,9 +601,12 @@ def import_scene_from_clipboard():
     renderChannels = list()
     nodes = list()
     materials = list()
+    environments = list()
 
     global black_listed_parms
-    black_listed_parms = ('roughness_model', 'option_use_roughness', 'subdivs_as_samples', 'enableDeepOutput', 'adv_exposure_mode', 'adv_printer_lights_per')
+    black_listed_parms = (
+        'roughness_model', 'option_use_roughness', 'subdivs_as_samples', 'enableDeepOutput', 'adv_exposure_mode',
+        'adv_printer_lights_per')
 
     # clear console
     print '\n' * 5000
@@ -523,7 +618,8 @@ def import_scene_from_clipboard():
                 ls = line.split(',', 1)
                 if len(ls) == 2:
                     if ls[0] == 'filename':
-                        parse_vrscene_file(ls[1], plugins, cameras, lights, settings, renderChannels, nodes)
+                        parse_vrscene_file(ls[1], plugins, cameras, lights, settings, renderChannels, nodes,
+                                           environments)
 
                         load_settings(settings)
                         load_render_channels(renderChannels)
@@ -531,6 +627,7 @@ def import_scene_from_clipboard():
                         # load_lights(lights)
                         load_nodes(nodes, materials)
                         load_materials(plugins, materials)
+                        load_environments(plugins, environments)
 
             print '\nScene import finished'
 
