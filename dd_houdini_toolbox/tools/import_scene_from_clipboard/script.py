@@ -14,17 +14,21 @@ def parse_vrscene_file(fname, plugins, cameras, lights, settings, renderChannels
     content = None
 
     with open(fname, 'r') as content_file:
-        content = re.sub(re.compile("//.*?\n"), "", content_file.read())  # load content without comments
-
+        content = content_file.read()
 
     matches = re.finditer(r'\#include\ \"(.*?)\"\n', content, re.MULTILINE | re.DOTALL)
     for matchNum, match in enumerate(matches):
         fname = match.group(1).strip()
+
         if os.path.isfile(fname):
             with open(fname, 'r') as content_file:
-                sub_content = re.sub(re.compile("//.*?\n"), "", content_file.read())  # load content without comments
-            content += sub_content
+                content += content_file.read()
 
+
+    content = re.sub(re.compile('\#include\ \"(.*?)\"\n'), '', content)  # content without includes
+    content = re.sub(re.compile('//.*?\n'), '', content)  # content without comments
+
+    #print content
 
     matches = re.finditer(r'(.*?)\ (.*?)\ {(.*?)\}', content, re.MULTILINE | re.DOTALL)
 
