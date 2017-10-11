@@ -24,11 +24,10 @@ def parse_vrscene_file(fname, plugins, cameras, lights, settings, renderChannels
             with open(fname, 'r') as content_file:
                 content += content_file.read()
 
-
     content = re.sub(re.compile('\#include\ \"(.*?)\"\n'), '', content)  # content without includes
     content = re.sub(re.compile('//.*?\n'), '', content)  # content without comments
 
-    #print content
+    # print content
 
     matches = re.finditer(r'(.*?)\ (.*?)\ {(.*?)\}', content, re.MULTILINE | re.DOTALL)
 
@@ -285,6 +284,7 @@ def get_render_channels_container(render_channels_rop):
         render_channel_container.moveToGoodPosition()
     return render_channel_container
 
+
 def try_create_node(parent, type, name, message_stack):
     node = None
     try:
@@ -299,6 +299,7 @@ def try_create_node(parent, type, name, message_stack):
             message_stack.append('cannot set name:' + name)
 
     return node
+
 
 def load_render_channels(renderChannels):
     # loading render channels
@@ -318,8 +319,6 @@ def load_render_channels(renderChannels):
             child.destroy()
 
     render_channels_container = get_render_channels_container(render_channels_rop)
-
-
 
     print '\n\n\n#############################################'
     print '#########  LOADING RENDER CHANNELS  #########'
@@ -342,10 +341,10 @@ def load_render_channels(renderChannels):
                 parm_val = try_parse_parm_value(s['Name'], parm_name, p['Value'], message_stack)
 
                 if type == 'RenderChannelColor' and parm_name == 'alias':
-                    parm_val -= 100 # item numbering from max starts at 100
+                    parm_val -= 100  # item numbering from max starts at 100
 
-                if type == 'RenderChannelZDepth' and ( parm_name == 'depth_black' or parm_name == 'depth_white' ):
-                    parm_val *= 0.01 # metric values ! need convertion
+                if type == 'RenderChannelZDepth' and (parm_name == 'depth_black' or parm_name == 'depth_white'):
+                    parm_val *= 0.01  # metric values ! need convertion
 
                 print parm_name + " = " + str(parm_val)
                 try_set_parm(render_channel, parm_name, parm_val, message_stack)
@@ -431,100 +430,97 @@ def try_set_input(output_node, input_name, node, message_stack):
 
 
 def add_plugin_node(plugins, material, output_node, input_name, node_name, node_type, node_parms, message_stack):
-    node = material.node(normalize_name(node_name))
-    if node == None:
-        node = material.createNode('VRayNode' + node_type)
-        node.setName(normalize_name(node_name))
-    else:
-        revert_parms_to_default(node.parms())
-
-    try_set_input(output_node, input_name, node, message_stack)
+    node = try_create_node(material, 'VRayNode' + node_type, node_name, message_stack)
 
     print '\n\n( ' + normalize_name(node_name) + ' )'
 
-    for p in node_parms:
-        parm_name = p['Name']
-        parm_val = p['Value']
-        parm_val = try_parse_parm_value(node_name, parm_name, p['Value'], message_stack)
+    if node != None:
 
-        if node_type == 'BRDFBump' and parm_name == 'bump_tex':
-            parm_name = 'bump_tex_color'  # to test !...
+        try_set_input(output_node, input_name, node, message_stack)
 
-        if node_type == 'BRDFVRayMtl' and parm_name == 'brdf_type':
-            if parm_val == 4: parm_val = 3  # need this conversion because of the difference between max and houdini menu list
+        for p in node_parms:
+            parm_name = p['Name']
+            parm_val = p['Value']
+            parm_val = try_parse_parm_value(node_name, parm_name, p['Value'], message_stack)
 
-        if node_type == 'UVWGenChannel' and parm_name == 'uvw_transform':
-            matrix4 = hou.Matrix4(parm_val[0])
-            result = matrix4.explode(transform_order='srt', rotate_order='xyz', pivot=parm_val[1])
+            if node_type == 'BRDFBump' and parm_name == 'bump_tex':
+                parm_name = 'bump_tex_color'  # to test !...
 
-            xform = material.node(output_node.name() + '_makexform')
-            if xform == None:
-                xform = material.createNode('makexform')
-                xform.setName(output_node.name() + '_makexform')
+            if node_type == 'BRDFVRayMtl' and parm_name == 'brdf_type':
+                if parm_val == 4: parm_val = 3  # need this conversion because of the difference between max and houdini menu list
 
-            try_set_parm(xform, 'trans', result['translate'], message_stack)
-            try_set_parm(xform, 'rot', result['rotate'], message_stack)
-            try_set_parm(xform, 'scale', result['scale'], message_stack)
-            try_set_parm(xform, 'pivot', result['shear'], message_stack)
+            if node_type == 'UVWGenChannel' and parm_name == 'uvw_transform':
+                matrix4 = hou.Matrix4(parm_val[0])
+                result = matrix4.explode(transform_order='srt', rotate_order='xyz', pivot=parm_val[1])
 
-            try_set_input(node, 'uvw_transform', xform, message_stack)
+                xform = material.node(output_node.name() + '_makexform')
+                if xform == None:
+                    xform = material.createNode('makexform')
+                    xform.setName(output_node.name() + '_makexform')
 
-        elif node_type == 'MtlMulti':
+                try_set_parm(xform, 'trans', result['translate'], message_stack)
+                try_set_parm(xform, 'rot', result['rotate'], message_stack)
+                try_set_parm(xform, 'scale', result['scale'], message_stack)
+                try_set_parm(xform, 'pivot', result['shear'], message_stack)
 
-            if parm_name == 'mtls_list':
+                try_set_input(node, 'uvw_transform', xform, message_stack)
 
-                # insert mtlid_gen // necessary for material_ids generation
-                mtlid_gen = material.node(output_node.name() + '_mtlid_gen')
-                if mtlid_gen == None:
-                    mtlid_gen = node.insertParmGenerator('mtlid_gen', hou.vopParmGenType.Parameter, False)
-                    mtlid_gen.setName(output_node.name() + '_mtlid_gen')
+            elif node_type == 'MtlMulti':
 
-                try_set_parm(node, 'mtl_count', len(parm_val), message_stack)
+                if parm_name == 'mtls_list':
 
-                for i in range(0, len(parm_val)):
-                    for nn in plugins:
-                        if nn['Name'] == parm_val[i]:
-                            add_plugin_node(plugins, material, node, 'mtl_' + str(i + 1), nn['Name'], nn['Type'],
-                                            nn['Parms'], message_stack)
+                    # insert mtlid_gen // necessary for material_ids generation
+                    mtlid_gen = material.node(output_node.name() + '_mtlid_gen')
+                    if mtlid_gen == None:
+                        mtlid_gen = node.insertParmGenerator('mtlid_gen', hou.vopParmGenType.Parameter, False)
+                        mtlid_gen.setName(output_node.name() + '_mtlid_gen')
 
-            elif parm_name == 'ids_list':
+                    try_set_parm(node, 'mtl_count', len(parm_val), message_stack)
 
-                pass
+                    for i in range(0, len(parm_val)):
+                        for nn in plugins:
+                            if nn['Name'] == parm_val[i]:
+                                add_plugin_node(plugins, material, node, 'mtl_' + str(i + 1), nn['Name'], nn['Type'],
+                                                nn['Parms'], message_stack)
 
-        elif node_type == 'BRDFLayered':
+                elif parm_name == 'ids_list':
 
-            if parm_name == 'brdfs':
+                    pass
 
-                try_set_parm(node, 'brdf_count', len(parm_val), message_stack)
+            elif node_type == 'BRDFLayered':
 
-                parm_val = parm_val[::-1]  # reversed
+                if parm_name == 'brdfs':
 
-                for i in range(0, len(parm_val)):
-                    for nn in plugins:
-                        if nn['Name'] == parm_val[i]:
-                            add_plugin_node(plugins, material, node, 'brdf_' + str(i + 1), nn['Name'], nn['Type'],
-                                            nn['Parms'], message_stack)
+                    try_set_parm(node, 'brdf_count', len(parm_val), message_stack)
 
-            elif parm_name == 'weights':
+                    parm_val = parm_val[::-1]  # reversed
 
-                parm_val = parm_val[::-1]  # reversed
+                    for i in range(0, len(parm_val)):
+                        for nn in plugins:
+                            if nn['Name'] == parm_val[i]:
+                                add_plugin_node(plugins, material, node, 'brdf_' + str(i + 1), nn['Name'], nn['Type'],
+                                                nn['Parms'], message_stack)
 
-                for i in range(0, len(parm_val)):
-                    for nn in plugins:
-                        if nn['Name'] == parm_val[i]:
-                            add_plugin_node(plugins, material, node, 'weight_' + str(i + 1), nn['Name'], nn['Type'],
-                                            nn['Parms'], message_stack)
+                elif parm_name == 'weights':
 
-        elif '@' in str(parm_val) or 'bitmapBuffer' in str(parm_val):
-            for nn in plugins:
-                if nn['Name'] == str(parm_val):
-                    add_plugin_node(plugins, material, node, parm_name, nn['Name'], nn['Type'], nn['Parms'],
-                                    message_stack)
+                    parm_val = parm_val[::-1]  # reversed
 
-        else:
+                    for i in range(0, len(parm_val)):
+                        for nn in plugins:
+                            if nn['Name'] == parm_val[i]:
+                                add_plugin_node(plugins, material, node, 'weight_' + str(i + 1), nn['Name'], nn['Type'],
+                                                nn['Parms'], message_stack)
 
-            print parm_name + " = " + str(parm_val)
-            try_set_parm(node, parm_name, parm_val, message_stack)
+            elif '@' in str(parm_val) or 'bitmapBuffer' in str(parm_val):
+                for nn in plugins:
+                    if nn['Name'] == str(parm_val):
+                        add_plugin_node(plugins, material, node, parm_name, nn['Name'], nn['Type'], nn['Parms'],
+                                        message_stack)
+
+            else:
+
+                print parm_name + " = " + str(parm_val)
+                try_set_parm(node, parm_name, parm_val, message_stack)
 
 
 def load_materials(plugins, materials):
@@ -541,9 +537,11 @@ def load_materials(plugins, materials):
         material = shop.node(m['Name'])
         if material == None:
             material = shop.createNode('vray_material')
-            for n in material.children(): n.destroy()
             material.setName(m['Name'])
             material.moveToGoodPosition()
+        else:
+            for child in material.children():
+                child.destroy()
 
         for n in plugins:
             if n['Name'] == m['Codename']:
