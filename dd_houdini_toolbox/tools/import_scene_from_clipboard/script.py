@@ -1,16 +1,17 @@
 import hou
 import re
 import os.path
+import shutil
 
 try:
     from PyQt5 import QtWidgets, QtCore, QtGui
 except ImportError:
     from Qt import QtWidgets, QtCore, QtGui
 
-global re, setTimelineRange, parse_vrscene_file, import_scene_from_clipboard, get_vray_rop_node, try_parse_parm_value, normalize_name, try_create_node, try_set_parm, load_settings, load_cameras, load_lights, load_render_channels, get_render_channels_container, load_nodes, load_materials, try_set_input, get_material_output, add_plugin_node, revert_parms_to_default, load_environments, get_environment_settings, find_or_create_user_color
+global re, setTimelineRange, parse_vrscene_file, import_scene_from_clipboard, get_vray_rop_node, try_parse_parm_value, normalize_name, try_create_node, try_set_parm, load_settings, load_cameras, load_lights, load_render_channels, get_render_channels_container, load_nodes, load_materials, try_set_input, get_material_output, add_plugin_node, revert_parms_to_default, load_environments, get_environment_settings, find_or_create_user_color, add_vray_objectid_param_template, add_scene_wirecolor_visualizer
 
 
-def parse_vrscene_file(fname, plugins, cameras, lights, settings, renderChannels, nodes, environments):
+def parse_vrscene_file(fname, plugins, cameras, lights, settings, renderChannels, nodes, environments, geometries):
     content = None
 
     with open(fname, 'r') as content_file:
@@ -29,7 +30,7 @@ def parse_vrscene_file(fname, plugins, cameras, lights, settings, renderChannels
 
     # print content
 
-    matches = re.finditer(r'(.*?)\ (.*?)\ {(.*?)\}', content, re.MULTILINE | re.DOTALL)
+    matches = re.finditer(r'(.*?)\ (.*?)\ \{(.*?)\}', content, re.MULTILINE | re.DOTALL)
 
     for matchNum, match in enumerate(matches):
         type = match.group(1).strip()
@@ -42,9 +43,10 @@ def parse_vrscene_file(fname, plugins, cameras, lights, settings, renderChannels
 
             for p in (i for i in match.group(3).split(';') if i.strip() != ''):
                 split = p.strip().split('=', 1)
-                parm_name = split[0]
-                parm_val = split[1]
-                parms.append({'Name': parm_name, 'Value': parm_val})
+                if len(split) == 2:
+                    parm_name = split[0]
+                    parm_val = split[1]
+                    parms.append({'Name': parm_name, 'Value': parm_val})
 
             if type == 'Node':
                 nodes.append({'Type': type, 'Name': name, 'Parms': parms})
@@ -70,6 +72,10 @@ def parse_vrscene_file(fname, plugins, cameras, lights, settings, renderChannels
             # catch cameras
             elif 'Camera' in type:
                 cameras.append({'Type': type, 'Name': name, 'Parms': parms})
+
+            # catch geometries
+            elif 'Geometry' in type:
+                geometries.append({'Type': type, 'Name': name, 'Parms': parms})
 
             else:
                 # plugins.append({'Type': 'VRayNode' + type, 'Name': name, 'Parms': parms})
@@ -287,12 +293,20 @@ def get_render_channels_container(render_channels_rop):
 
 def try_create_node(parent, type, name, message_stack):
     node = None
+    old_node = parent.node(name)
+
     try:
         node = parent.createNode(type)
+        if old_node != None:
+            node.setPosition(old_node.position())
+        else:
+            node.moveToGoodPosition()
     except:
         message_stack.append('cannot create node name:' + name + ' type: ' + str(type))
 
-    if node != None and name != '':
+    if node != None:
+        if old_node != None:
+            old_node.destroy()
         try:
             node.setName(name)
         except:
@@ -360,10 +374,34 @@ def load_render_channels(renderChannels):
         print m
 
 
-def load_nodes(nodes, materials):
+def add_vray_objectid_param_template(geo):
+    parm_group = geo.parmTemplateGroup()
+    parm_folder = hou.FolderParmTemplate('folder', 'V-Ray Object')
+    parm_folder.addParmTemplate(hou.IntParmTemplate('vray_objectID', 'Object ID', 1))
+    parm_group.append(parm_folder)
+    geo.setParmTemplateGroup(parm_group)
+
+
+def add_scene_wirecolor_visualizer():
+    if len([visualizer for visualizer in
+            hou.viewportVisualizers.visualizers(category=hou.viewportVisualizerCategory.Scene) if
+            visualizer.name() == 'wirecolor']) == 0:
+        wirecolor_vis = hou.viewportVisualizers.createVisualizer(hou.viewportVisualizers.types()[1],
+                                                                 category=hou.viewportVisualizerCategory.Scene)
+        wirecolor_vis.setName('wirecolor')
+        wirecolor_vis.setLabel('Wirecolor')
+        wirecolor_vis.setParm('attrib', 'wirecolor')
+        wirecolor_vis.setParm('class', 3)
+        geoviewport = hou.ui.paneTabOfType(hou.paneTabType.SceneViewer).curViewport()
+        wirecolor_vis.setIsActive(True, viewport=geoviewport)
+
+
+def load_nodes(nodes, geometries, materials):
     # loading nodes
     message_stack = list()
     obj = hou.node('/obj')
+
+    geo_dir = hou.expandString('$HIP') + '/geo/'
 
     print '\n\n\n#############################################'
     print '###########  LOADING SCENE NODES  ###########'
@@ -376,21 +414,95 @@ def load_nodes(nodes, materials):
         material_name = normalize_name(material.split('@', 1)[0])
         materials.append({'Name': material_name, 'Codename': material})
 
-        node = obj.node(normalize_name(name))
-        if node == None:
-            node = obj.createNode('geo')
-            node.setName(normalize_name(name))
-            node.moveToGoodPosition()
+        # here search for the corresponding geometry
+        geometry = None
+        for g in geometries:
+            if g['Name'] == name:
+                geometry = g
+                break
 
-        # here load corresponding .abc
+        # if geometry exists getting parameters...
+        if geometry != None:
+            geo = try_create_node(obj, 'geo', normalize_name(name), message_stack)
 
-        node.parm('shop_materialpath').set('/shop/' + material_name)
+            if geo != None:
+                for child in geo.children():
+                    child.destroy()
+
+                add_vray_objectid_param_template(geo)
+                geo.parm('shop_materialpath').set('/shop/' + material_name)
+
+            #retrieving geometry parameters
+            from_filename = ''
+            object_id = 0
+            wirecolor = (0.5, 0.5, 0.5)
+            handle = 0
+            for p in geometry['Parms']:
+                parm_name = p['Name']
+                parm_val = p['Value']
+
+                if parm_name == 'filename':
+                    from_filename = try_parse_parm_value(name, parm_name, parm_val, message_stack)
+                elif parm_name == 'object_id':
+                    object_id = try_parse_parm_value(name, parm_name, parm_val, message_stack)
+                elif parm_name == 'wirecolor':
+                    wirecolor = try_parse_parm_value(name, parm_name, parm_val, message_stack)
+                elif parm_name == 'handle':
+                    handle = try_parse_parm_value(name, parm_name, parm_val, message_stack)
+
+            # copy cache file from temp location to .hip/geo dir
+            if os.path.isfile(from_filename):
+                to_filename = geo_dir + name + ".abc"
+                try:
+                    # shutil.move(from_filename, to_filename)
+                    shutil.copy(from_filename, to_filename)
+                except IOError:
+                    os.chmod(to_filename, 777)  # ?? still can raise exception
+                    shutil.move(from_filename, to_filename)
+
+            geo.parm('vray_objectID').set(object_id)
+            geo.parm('use_dcolor').set(True)
+            geo.parm('dcolorr').set(wirecolor[0])
+            geo.parm('dcolorg').set(wirecolor[1])
+            geo.parm('dcolorb').set(wirecolor[2])
+
+            alembic = geo.node('alembic1')
+            if alembic == None:
+                alembic = geo.createNode('alembic')
+            alembic.parm('fileName').set('$HIP/geo/' + name + ".abc")
+            alembic.parm('reload').pressButton()
+
+            xform = geo.node('xform1')
+            if xform == None:
+                xform = alembic.createOutputNode('xform', 'xform1')
+            xform.parm('scale').set(0.01)
+
+            properties = geo.node('properties')
+            if properties == None:
+                properties = xform.createOutputNode('attribwrangle', 'properties')
+                properties.parm('class').set(0)
+                properties.setDisplayFlag(True)
+
+            properties.parm('snippet').set(
+                'v@wirecolor = set(' + str(wirecolor[0]) + ', ' + str(wirecolor[1]) + ', ' + str(
+                    wirecolor[2]) + ');\ni@handle = ' + str(handle) + ';')
+
+            vraypoxy = geo.node('vrayproxy1')
+            if vraypoxy == None:
+                vraypoxy = geo.createNode('VRayNodeVRayProxy', 'vrayproxy1')
+                vraypoxy.moveToGoodPosition()
+
+            vraypoxy.parm('file').setExpression('chs("../alembic1/fileName")')
+            vraypoxy.parm('reload').pressButton()
+            vraypoxy.parm('scale').setExpression('ch("../xform1/scale")')
+            vraypoxy.parm('first_map_channel').set(1)
+            vraypoxy.setRenderFlag(True)
+
+            geo.layoutChildren()
 
         print name + ' ( ' + material_name + ' )'
 
-        '''for p in n['Parms']:
-            parm_name = p['Name']
-            parm_val = p['Value']'''
+    add_scene_wirecolor_visualizer()
 
     if len(message_stack) != 0:
         print '\n\n\nLoad Scene Nodes terminated with: ' + str(len(message_stack)) + ' errors:\n'
@@ -429,8 +541,8 @@ def try_set_input(output_node, input_name, node, message_stack):
         message_stack.append('cannot find input: ' + str(input_name) + ' on node: ' + output_node.name())
 
 
-def add_plugin_node(plugins, material, output_node, input_name, node_name, node_type, node_parms, message_stack):
-    node = try_create_node(material, 'VRayNode' + node_type, node_name, message_stack)
+def add_plugin_node(plugins, parent, output_node, input_name, node_name, node_type, node_parms, message_stack):
+    node = try_create_node(parent, 'VRayNode' + node_type, normalize_name(node_name), message_stack)
 
     print '\n\n( ' + normalize_name(node_name) + ' )'
 
@@ -453,10 +565,10 @@ def add_plugin_node(plugins, material, output_node, input_name, node_name, node_
                 matrix4 = hou.Matrix4(parm_val[0])
                 result = matrix4.explode(transform_order='srt', rotate_order='xyz', pivot=parm_val[1])
 
-                xform = material.node(output_node.name() + '_makexform')
+                xform = parent.node(output_node.name() + '_makexform')
                 if xform == None:
-                    xform = material.createNode('makexform')
-                    xform.setName(output_node.name() + '_makexform')
+                    xform = parent.createNode('makexform')
+                    xform.setName(output_node.name() + '_uvwgen_makexform')
 
                 try_set_parm(xform, 'trans', result['translate'], message_stack)
                 try_set_parm(xform, 'rot', result['rotate'], message_stack)
@@ -470,7 +582,7 @@ def add_plugin_node(plugins, material, output_node, input_name, node_name, node_
                 if parm_name == 'mtls_list':
 
                     # insert mtlid_gen // necessary for material_ids generation
-                    mtlid_gen = material.node(output_node.name() + '_mtlid_gen')
+                    mtlid_gen = parent.node(output_node.name() + '_mtlid_gen')
                     if mtlid_gen == None:
                         mtlid_gen = node.insertParmGenerator('mtlid_gen', hou.vopParmGenType.Parameter, False)
                         mtlid_gen.setName(output_node.name() + '_mtlid_gen')
@@ -480,7 +592,7 @@ def add_plugin_node(plugins, material, output_node, input_name, node_name, node_
                     for i in range(0, len(parm_val)):
                         for nn in plugins:
                             if nn['Name'] == parm_val[i]:
-                                add_plugin_node(plugins, material, node, 'mtl_' + str(i + 1), nn['Name'], nn['Type'],
+                                add_plugin_node(plugins, parent, node, 'mtl_' + str(i + 1), nn['Name'], nn['Type'],
                                                 nn['Parms'], message_stack)
 
                 elif parm_name == 'ids_list':
@@ -498,7 +610,7 @@ def add_plugin_node(plugins, material, output_node, input_name, node_name, node_
                     for i in range(0, len(parm_val)):
                         for nn in plugins:
                             if nn['Name'] == parm_val[i]:
-                                add_plugin_node(plugins, material, node, 'brdf_' + str(i + 1), nn['Name'], nn['Type'],
+                                add_plugin_node(plugins, parent, node, 'brdf_' + str(i + 1), nn['Name'], nn['Type'],
                                                 nn['Parms'], message_stack)
 
                 elif parm_name == 'weights':
@@ -508,13 +620,13 @@ def add_plugin_node(plugins, material, output_node, input_name, node_name, node_
                     for i in range(0, len(parm_val)):
                         for nn in plugins:
                             if nn['Name'] == parm_val[i]:
-                                add_plugin_node(plugins, material, node, 'weight_' + str(i + 1), nn['Name'], nn['Type'],
+                                add_plugin_node(plugins, parent, node, 'weight_' + str(i + 1), nn['Name'], nn['Type'],
                                                 nn['Parms'], message_stack)
 
             elif '@' in str(parm_val) or 'bitmapBuffer' in str(parm_val):
                 for nn in plugins:
                     if nn['Name'] == str(parm_val):
-                        add_plugin_node(plugins, material, node, parm_name, nn['Name'], nn['Type'], nn['Parms'],
+                        add_plugin_node(plugins, parent, node, parm_name, nn['Name'], nn['Type'], nn['Parms'],
                                         message_stack)
 
             else:
@@ -534,26 +646,23 @@ def load_materials(plugins, materials):
 
     for m in materials:
 
-        material = shop.node(m['Name'])
-        if material == None:
-            material = shop.createNode('vray_material')
-            material.setName(m['Name'])
-            material.moveToGoodPosition()
-        else:
+        material = try_create_node(shop, 'vray_material', normalize_name(m['Name']), message_stack)
+
+        if material != None:
             for child in material.children():
                 child.destroy()
 
-        for n in plugins:
-            if n['Name'] == m['Codename']:
-                material_output = get_material_output(material)
-                input_name = 'Material'
+            for n in plugins:
+                if n['Name'] == m['Codename']:
+                    material_output = get_material_output(material)
+                    input_name = 'Material'
 
-                add_plugin_node(plugins, material, material_output, input_name, n['Name'], n['Type'], n['Parms'],
-                                message_stack)
+                    add_plugin_node(plugins, material, material_output, input_name, n['Name'], n['Type'], n['Parms'],
+                                    message_stack)
 
-                material.layoutChildren()
+                    material.layoutChildren()
 
-                break
+                    break
 
     if len(message_stack) != 0:
         print '\n\n\nLoad Scene materials terminated with: ' + str(len(message_stack)) + ' errors:\n'
@@ -604,6 +713,10 @@ def load_environments(plugins, environments):
         environment_rop.moveToGoodPosition()
         vray_rop.parm('render_network_environment').set(environment_rop.path())
 
+    for child in environment_rop.children():
+        if child.type().name() != 'VRayNodeSettingsEnvironment':
+            child.destroy()
+
     environment_settings = get_environment_settings(environment_rop)
 
     print '\n\n\n#############################################'
@@ -613,9 +726,21 @@ def load_environments(plugins, environments):
     for p in environments:
         parm_name = p['Name']
         parm_val = try_parse_parm_value(environment_settings, parm_name, p['Value'], message_stack)
+
         print parm_name + " = " + str(parm_val)
+
         if isinstance(parm_val, hou.Vector4):
             find_or_create_user_color(environment_settings, environment_rop, parm_name, parm_val, message_stack)
+
+        for n in plugins:
+            # print 'n[\'Name\']: ' + n['Name'] + ' - p[\'Value\']: ' + str(p['Value'])
+            if n['Name'] == p['Value']:
+                # print '/////////////////MATCH////////////////'*10
+                # add_plugin_node(plugins, parent, output_node, input_name, node_name, node_type, node_parms, message_stack)
+                add_plugin_node(plugins, environment_settings, environment_rop, p['Name'], normalize_name(n['Name']),
+                                n['Type'], n['Parms'],
+                                message_stack)
+                break
 
     print '\n\n'
 
@@ -641,11 +766,36 @@ def import_scene_from_clipboard():
     nodes = list()
     materials = list()
     environments = list()
+    geometries = list()
 
     global black_listed_parms
+
+    # some black listed parameters, sometimes not yet implemented, or no need to be implemented...
     black_listed_parms = (
         'roughness_model', 'option_use_roughness', 'subdivs_as_samples', 'enableDeepOutput', 'adv_exposure_mode',
-        'adv_printer_lights_per')
+        'adv_printer_lights_per', 'SettingsRTEngine_low_gpu_thread_priority', 'SettingsRTEngine_interactive',
+        'SettingsRTEngine_enable_cpu_interop', 'SettingsUnitsInfo_meters_scale', 'SettingsUnitsInfo_photometric_scale',
+        'SettingsUnitsInfo_scene_upDir', 'SettingsUnitsInfo_seconds_scale', 'SettingsUnitsInfo_frames_scale',
+        'SettingsUnitsInfo_rgb_color_space', 'SettingsImageSampler_progressive_effectsUpdate',
+        'SettingsImageSampler_render_mask_clear', 'SettingsLightCache_premultiplied',
+        'SettingsIrradianceMap_detail_enhancement', 'SettingsPhotonMap_bounces', 'SettingsPhotonMap_max_photons',
+        'SettingsPhotonMap_prefilter', 'SettingsPhotonMap_prefilter_samples', 'SettingsPhotonMap_mode',
+        'SettingsPhotonMap_auto_search_distance', 'SettingsPhotonMap_search_distance',
+        'SettingsPhotonMap_convex_hull_estimate', 'SettingsPhotonMap_dont_delete', 'SettingsPhotonMap_auto_save',
+        'SettingsPhotonMap_auto_save_file', 'SettingsPhotonMap_store_direct_light', 'SettingsPhotonMap_multiplier',
+        'SettingsPhotonMap_max_density', 'SettingsPhotonMap_retrace_corners', 'SettingsPhotonMap_retrace_bounces',
+        'SettingsPhotonMap_show_calc_phase', 'SettingsDMCSampler_path_sampler_type', 'SettingsVFB_bloom_on',
+        'SettingsVFB_bloom_fill_edges', 'SettingsVFB_bloom_weight', 'SettingsVFB_bloom_size', 'SettingsVFB_bloom_shape',
+        'SettingsVFB_bloom_mode', 'SettingsVFB_bloom_mask_intensity_on', 'SettingsVFB_bloom_mask_intensity',
+        'SettingsVFB_bloom_mask_objid_on', 'SettingsVFB_bloom_mask_objid', 'SettingsVFB_bloom_mask_mtlid_on',
+        'SettingsVFB_bloom_mask_mtlid', 'SettingsVFB_glare_on', 'SettingsVFB_glare_fill_edges',
+        'SettingsVFB_glare_weight', 'SettingsVFB_glare_size', 'SettingsVFB_glare_type', 'SettingsVFB_glare_mode',
+        'SettingsVFB_glare_image_path', 'SettingsVFB_glare_obstacle_image_path', 'SettingsVFB_glare_diffraction_on',
+        'SettingsVFB_glare_use_obstacle_image', 'SettingsVFB_glare_cam_blades_on', 'SettingsVFB_glare_cam_num_blades',
+        'SettingsVFB_glare_cam_rotation', 'SettingsVFB_glare_cam_fnumber', 'SettingsVFB_glare_mask_intensity_on',
+        'SettingsVFB_glare_mask_intensity', 'SettingsVFB_glare_mask_objid_on', 'SettingsVFB_glare_mask_objid',
+        'SettingsVFB_glare_mask_mtlid_on', 'SettingsVFB_glare_mask_mtlid', 'SettingsVFB_interactive',
+        'SettingsVFB_hardware_accelerated', 'SettingsVFB_display_srgb')
 
     # clear console
     print '\n' * 5000
@@ -658,13 +808,13 @@ def import_scene_from_clipboard():
                 if len(ls) == 2:
                     if ls[0] == 'filename':
                         parse_vrscene_file(ls[1], plugins, cameras, lights, settings, renderChannels, nodes,
-                                           environments)
+                                           environments, geometries)
 
                         load_settings(settings)
                         load_render_channels(renderChannels)
                         # load_cameras(cameras)
                         # load_lights(lights)
-                        load_nodes(nodes, materials)
+                        load_nodes(nodes, geometries, materials)
                         load_materials(plugins, materials)
                         load_environments(plugins, environments)
 
