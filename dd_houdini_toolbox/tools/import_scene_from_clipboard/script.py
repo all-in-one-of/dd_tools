@@ -432,7 +432,7 @@ def load_nodes(nodes, geometries, materials):
                 add_vray_objectid_param_template(geo)
                 geo.parm('shop_materialpath').set('/shop/' + material_name)
 
-            #retrieving geometry parameters
+            # retrieving geometry parameters
             from_filename = ''
             object_id = 0
             wirecolor = (0.5, 0.5, 0.5)
@@ -562,15 +562,16 @@ def add_plugin_node(plugins, parent, output_node, input_name, node_name, node_ty
                 if parm_val == 4: parm_val = 3  # need this conversion because of the difference between max and houdini menu list
 
             if node_type == 'UVWGenChannel' and parm_name == 'uvw_transform':
-                matrix4 = hou.Matrix4(parm_val[0])
-                result = matrix4.explode(transform_order='srt', rotate_order='xyz', pivot=parm_val[1])
+                m4 = hou.Matrix4(parm_val[0])
+                result = m4.explode(transform_order='trs', rotate_order='xyz', pivot=hou.Vector3(0.5, 0.5, 0)) #, pivot=parm_val[1])
 
                 xform = parent.node(output_node.name() + '_makexform')
                 if xform == None:
                     xform = parent.createNode('makexform')
                     xform.setName(output_node.name() + '_uvwgen_makexform')
 
-                try_set_parm(xform, 'trans', result['translate'], message_stack)
+                #try_set_parm(xform, 'trans', result['translate'], message_stack)
+                try_set_parm(xform, 'trans', parm_val[1], message_stack)
                 try_set_parm(xform, 'rot', result['rotate'], message_stack)
                 try_set_parm(xform, 'scale', result['scale'], message_stack)
                 try_set_parm(xform, 'pivot', result['shear'], message_stack)
@@ -737,6 +738,7 @@ def load_environments(plugins, environments):
             if n['Name'] == p['Value']:
                 # print '/////////////////MATCH////////////////'*10
                 # add_plugin_node(plugins, parent, output_node, input_name, node_name, node_type, node_parms, message_stack)
+                # problem below !!!!!!!!!!!!
                 add_plugin_node(plugins, environment_settings, environment_rop, p['Name'], normalize_name(n['Name']),
                                 n['Type'], n['Parms'],
                                 message_stack)
