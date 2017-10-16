@@ -8,7 +8,7 @@ try:
 except ImportError:
     from Qt import QtWidgets, QtCore, QtGui
 
-global re, setTimelineRange, parse_vrscene_file, import_scene_from_clipboard, get_vray_rop_node, try_parse_parm_value, normalize_name, try_create_node, try_set_parm, load_settings, load_cameras, load_lights, load_render_channels, get_render_channels_container, load_nodes, load_materials, try_set_input, get_material_output, add_plugin_node, revert_parms_to_default, load_environments, get_environment_settings, find_or_create_user_color, add_vray_objectid_param_template, add_scene_wirecolor_visualizer
+global re, setTimelineRange, parse_vrscene_file, import_scene_from_clipboard, get_vray_rop_node, try_parse_parm_value, normalize_name, try_create_node, try_set_parm, load_settings, load_cameras, load_lights, load_render_channels, get_render_channels_container, load_nodes, load_materials, try_set_input, get_material_output, add_plugin_node, revert_parms_to_default, load_environments, get_environment_settings, find_or_create_user_color, add_vray_objectid_param_template, add_scene_wirecolor_visualizer, try_find_or_create_node
 
 
 def parse_vrscene_file(fname, plugins, cameras, lights, settings, renderChannels, nodes, environments, geometries):
@@ -114,12 +114,16 @@ def try_parse_parm_value(name, parm_name, parm_val, message_stack):
                 if parm_val == 'spherical_vray':
                     result = 6
 
+        elif parm_val.startswith('Matrix'):
+            # Transform(Matrix(Vector(1, 0, 0), Vector(0, 1, 0), Vector(0, 0, 1)), Vector(0, 0, 0))
+            result = re.match(r"Matrix\((.*?.*)\)", parm_val)
+            result = hou.Matrix3(eval('(' + result.group(1).replace('Vector', '') + ')'))
+
         elif parm_val.startswith('Transform'):
             # Transform(Matrix(Vector(1, 0, 0), Vector(0, 1, 0), Vector(0, 0, 1)), Vector(0, 0, 0))
             result = re.match(r"Transform\(Matrix\((.*?.*)\), (.*?.*)\)", parm_val)
             result = (hou.Matrix3(eval('(' + result.group(1).replace('Vector', '') + ')')),
                       hou.Vector3(eval(result.group(2).replace('Vector', ''))))
-            print result
 
         elif parm_val.startswith('Color'):
             result = hou.Vector3(eval(parm_val[5:]))
@@ -156,6 +160,10 @@ def try_set_parm(node, parm_name, parm_val, message_stack):
         try:
             if isinstance(parm_val, hou.Vector3) or isinstance(parm_val, hou.Vector4):
                 node.parmTuple(parm_name).set(parm_val)
+
+            elif isinstance(parm_val, hou.Matrix3):
+                node.parmTuple(parm_name).set(parm_val.asTuple())
+
             else:
                 node.parm(parm_name).set(parm_val)
 
@@ -199,6 +207,13 @@ def load_settings(settings):
                     setTimelineRange(parm_val[0], parm_val[1])
 
             else:
+                if s['Type'] == 'SettingsGI':
+                    if parm_name == 'primary_engine' or parm_name == 'secondary_engine':
+                        if parm_val == 2:
+                            parm_val = 1
+                        elif parm_val == 3:
+                            parm_val = 2
+
                 print s['Type'] + '_' + parm_name + " = " + str(parm_val)
                 try_set_parm(vray_rop, s['Type'] + '_' + parm_name, parm_val, message_stack)
 
@@ -302,7 +317,7 @@ def try_create_node(parent, type, name, message_stack):
         else:
             node.moveToGoodPosition()
     except:
-        message_stack.append('cannot create node name:' + name + ' type: ' + str(type))
+        message_stack.append('cannot create node name:' + name + ' type: ' + str(type) + ' parent: ' + parent.name())
 
     if node != None:
         if old_node != None:
@@ -311,6 +326,29 @@ def try_create_node(parent, type, name, message_stack):
             node.setName(name)
         except:
             message_stack.append('cannot set name:' + name)
+
+    return node
+
+
+def try_find_or_create_node(parent, type, name, message_stack):
+    node = parent.node(name)
+
+    if node != None:
+        for p in (node.parms()):
+            p.deleteAllKeyframes()
+    else:
+        try:
+            node = parent.createNode(type)
+            node.moveToGoodPosition()
+        except:
+            message_stack.append(
+                'cannot create node name:' + name + ' type: ' + str(type) + ' parent: ' + parent.name())
+
+        if node != None:
+            try:
+                node.setName(name)
+            except:
+                message_stack.append('cannot set name:' + name)
 
     return node
 
@@ -542,7 +580,7 @@ def try_set_input(output_node, input_name, node, message_stack):
 
 
 def add_plugin_node(plugins, parent, output_node, input_name, node_name, node_type, node_parms, message_stack):
-    node = try_create_node(parent, 'VRayNode' + node_type, normalize_name(node_name), message_stack)
+    node = try_find_or_create_node(parent, 'VRayNode' + node_type, normalize_name(node_name), message_stack)
 
     print '\n\n( ' + normalize_name(node_name) + ' )'
 
@@ -558,35 +596,84 @@ def add_plugin_node(plugins, parent, output_node, input_name, node_name, node_ty
             if node_type == 'BRDFBump' and parm_name == 'bump_tex':
                 parm_name = 'bump_tex_color'  # to test !...
 
+            if node_type == 'BitmapBuffer' and parm_name == 'interpolation':
+                if parm_val == 3: parm_val = 0  # need this conversion because of out of range error with value of 3
+
             if node_type == 'BRDFVRayMtl' and parm_name == 'brdf_type':
                 if parm_val == 4: parm_val = 3  # need this conversion because of the difference between max and houdini menu list
 
-            if node_type == 'UVWGenChannel' and parm_name == 'uvw_transform':
-                m4 = hou.Matrix4(parm_val[0])
-                result = m4.explode(transform_order='trs', rotate_order='xyz', pivot=hou.Vector3(0.5, 0.5, 0)) #, pivot=parm_val[1])
+            if node_type == 'UVWGenEnvironment' and parm_name == 'mapping_type':
+                if parm_val == 'angular':
+                    parm_val = 0
+                elif parm_val == 'cubic':
+                    parm_val = 1
+                elif parm_val == 'spherical_vray':
+                    parm_val = 6
+                elif parm_val == 'mirror_ball':
+                    parm_val = 3
+                else:
+                    message_stack.append('unknown mapping_type value: "' + str(parm_val) + '" on node: ' + node.name())
+                    parm_val = 2
 
-                xform = parent.node(output_node.name() + '_makexform')
-                if xform == None:
-                    xform = parent.createNode('makexform')
-                    xform.setName(output_node.name() + '_uvwgen_makexform')
+                # if (node_type == 'UVWGenChannel' or node_type == 'UVWGenEnvironment') and parm_name == 'uvw_transform':
+            if parm_name == 'uvw_transform':
 
-                #try_set_parm(xform, 'trans', result['translate'], message_stack)
-                try_set_parm(xform, 'trans', parm_val[1], message_stack)
-                try_set_parm(xform, 'rot', result['rotate'], message_stack)
-                try_set_parm(xform, 'scale', result['scale'], message_stack)
-                try_set_parm(xform, 'pivot', result['shear'], message_stack)
+                makexform = try_find_or_create_node(parent, 'makexform', node.name() + '_transform', message_stack)
 
-                try_set_input(node, 'uvw_transform', xform, message_stack)
+                if makexform != None:
+                    result = hou.Matrix4(parm_val[0]).explode(transform_order='trs', rotate_order='xyz',
+                                                              pivot=hou.Vector3(0.5, 0.5, 0))  # , pivot=parm_val[1])
+
+                    # try_set_parm(xform, 'trans', result['translate'], message_stack)
+                    try_set_parm(makexform, 'trans', parm_val[1], message_stack)
+                    try_set_parm(makexform, 'rot', result['rotate'], message_stack)
+                    try_set_parm(makexform, 'scale', result['scale'], message_stack)
+                    try_set_parm(makexform, 'pivot', result['shear'], message_stack)
+
+                    try_set_input(node, 'uvw_transform', makexform, message_stack)
+
+            # if (node_type == 'UVWGenChannel' or node_type == 'UVWGenEnvironment') and parm_name == 'uvw_matrix':
+            elif parm_name == 'uvw_matrix':
+
+                matrix = try_find_or_create_node(parent, 'parameter', node.name() + '_matrix', message_stack)
+
+                if matrix != None:
+                    '''(preRotateX(matrix3[1, 0, 0][0, 0, 1][0, -1, 0][0, 0, 0]) - 90) * _t * inverse(
+                        matrix3[1, 0, 0][0, 0, 1][0, -1, 0][0, 0, 0])'''
+
+                    rot = parm_val.extractRotates()
+                    quat = hou.Quaternion(hou.hmath.buildRotate((rot[0]-90,rot[2], rot[1]), "xyz"))
+                    m3 = quat.extractRotationMatrix3().transposed()
+
+                    try_set_parm(matrix, 'parmname', 'uvw_matrix', message_stack)
+                    try_set_parm(matrix, 'parmtype', 13, message_stack)
+                    try_set_parm(matrix, 'float9def', m3, message_stack)
+                    try_set_parm(matrix, 'invisible', 1, message_stack)
+                    try_set_parm(matrix, 'exportparm', 1, message_stack)
+
+                    try_set_input(node, 'uvw_matrix', matrix, message_stack)
+
 
             elif node_type == 'MtlMulti':
 
                 if parm_name == 'mtls_list':
 
                     # insert mtlid_gen // necessary for material_ids generation
-                    mtlid_gen = parent.node(output_node.name() + '_mtlid_gen')
+                    '''mtlid_gen = parent.node(output_node.name() + '_mtlid_gen')
                     if mtlid_gen == None:
                         mtlid_gen = node.insertParmGenerator('mtlid_gen', hou.vopParmGenType.Parameter, False)
-                        mtlid_gen.setName(output_node.name() + '_mtlid_gen')
+                        mtlid_gen.setName(output_node.name() + '_mtlid_gen')'''
+                    mtlid_gen = try_find_or_create_node(parent, 'parameter', output_node.name() + '_mtlid_gen',
+                                                        message_stack)
+
+                    if mtlid_gen != None:
+                        try_set_parm(mtlid_gen, 'parmname', 'mtlid_gen', message_stack)
+                        try_set_parm(mtlid_gen, 'parmtype', 1, message_stack)
+                        try_set_parm(mtlid_gen, 'intdef', 0, message_stack)
+                        try_set_parm(mtlid_gen, 'invisible', 1, message_stack)
+                        try_set_parm(mtlid_gen, 'exportparm', 1, message_stack)
+
+                        try_set_input(node, 'mtlid_gen', mtlid_gen, message_stack)
 
                     try_set_parm(node, 'mtl_count', len(parm_val), message_stack)
 
@@ -685,20 +772,25 @@ def get_environment_settings(environment_rop):
     return render_environment
 
 
-def find_or_create_user_color(environment_settings, environment_rop, parm_name, parm_val, message_stack):
-    user_color = None
+def find_or_create_user_color(output_node, parent, input_name, parm_val, message_stack):
+    node = None
 
-    for child in environment_rop.children():
+    for child in parent.children():
         if child.type().name() == 'VRayNodeTexUserColor':
             if hou.Vector4(child.parmTuple('default_color').eval()) == parm_val:
-                user_color = child
+                node = child
                 break
 
-    if user_color == None:
-        user_color = environment_rop.createNode('VRayNodeTexUserColor')
-        try_set_parm(user_color, 'default_color', parm_val, message_stack)
+    if node == None:
+        node = parent.createNode('VRayNodeTexUserColor')
 
-    try_set_input(environment_settings, parm_name, user_color, message_stack)
+        count = 1
+        while parent.node('usercolor_' + str(count)) != None: count += 1
+        node.setName('usercolor_' + str(count))
+
+        try_set_parm(node, 'default_color', parm_val, message_stack)
+
+    try_set_input(output_node, input_name, node, message_stack)
 
 
 def load_environments(plugins, environments):
@@ -706,19 +798,19 @@ def load_environments(plugins, environments):
     message_stack = list()
 
     vray_rop = get_vray_rop_node()
-    environment_rop = hou.node(vray_rop.parm('render_network_environment').eval())
+    parent = hou.node(vray_rop.parm('render_network_environment').eval())
 
-    if environment_rop == None:
+    if parent == None:
         out = hou.node('/out')
-        environment_rop = out.createNode('vray_environment', 'env')
-        environment_rop.moveToGoodPosition()
-        vray_rop.parm('render_network_environment').set(environment_rop.path())
+        parent = out.createNode('vray_environment', 'env')
+        parent.moveToGoodPosition()
+        vray_rop.parm('render_network_environment').set(parent.path())
 
-    for child in environment_rop.children():
+    for child in parent.children():
         if child.type().name() != 'VRayNodeSettingsEnvironment':
             child.destroy()
 
-    environment_settings = get_environment_settings(environment_rop)
+    output_node = get_environment_settings(parent)
 
     print '\n\n\n#############################################'
     print '########  LOADING SCENE ENVIRONMENT  ########'
@@ -726,27 +818,21 @@ def load_environments(plugins, environments):
 
     for p in environments:
         parm_name = p['Name']
-        parm_val = try_parse_parm_value(environment_settings, parm_name, p['Value'], message_stack)
+        parm_val = try_parse_parm_value(output_node, parm_name, p['Value'], message_stack)
 
         print parm_name + " = " + str(parm_val)
 
         if isinstance(parm_val, hou.Vector4):
-            find_or_create_user_color(environment_settings, environment_rop, parm_name, parm_val, message_stack)
+            find_or_create_user_color(output_node, parent, parm_name, parm_val, message_stack)
 
-        for n in plugins:
-            # print 'n[\'Name\']: ' + n['Name'] + ' - p[\'Value\']: ' + str(p['Value'])
-            if n['Name'] == p['Value']:
-                # print '/////////////////MATCH////////////////'*10
-                # add_plugin_node(plugins, parent, output_node, input_name, node_name, node_type, node_parms, message_stack)
-                # problem below !!!!!!!!!!!!
-                add_plugin_node(plugins, environment_settings, environment_rop, p['Name'], normalize_name(n['Name']),
-                                n['Type'], n['Parms'],
+        for nn in plugins:
+            if nn['Name'] == str(parm_val):
+                add_plugin_node(plugins, parent, output_node, parm_name, nn['Name'], nn['Type'], nn['Parms'],
                                 message_stack)
-                break
 
     print '\n\n'
 
-    environment_rop.layoutChildren()
+    parent.layoutChildren()
 
     if len(message_stack) != 0:
         print '\n\n\nLoad Scene environment terminated with: ' + str(len(message_stack)) + ' errors:\n'
