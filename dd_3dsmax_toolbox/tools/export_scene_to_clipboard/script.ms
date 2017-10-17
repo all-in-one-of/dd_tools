@@ -141,7 +141,7 @@ fn maxToHoudiniGetTransforms _o _prerotate:false _step:1 _substeps:1 = (
 
 fn normalizeName _name = (
 
-    ( substituteString ( substituteString _name " " "_" ) "." "_" )
+    ( substituteString ( substituteString ( substituteString _name " " "_" ) "." "_" ) ":" "_" )
 )
 
 
@@ -209,7 +209,7 @@ fn exportCameras _step:1 _substeps:1 = (
 
         --if target
         if _o.target != undefined do (
-            _str += "TargetNode " + normalizeName _o.target.name + " {\n"
+            _str += "TargetObject " + normalizeName _o.target.name + " {\n"
             _t_t = maxToHoudiniGetTransforms _o.target _prerotate:false
             _t_p_x = for i in _t_t collect ( #( i[1], i[2].position.x / 100. ) )
             _t_p_y = for i in _t_t collect ( #( i[1], i[2].position.y / 100. ) )
@@ -274,9 +274,9 @@ fn exportCameras _step:1 _substeps:1 = (
         )
 
         --scale
-        _str += "  sx=" + formatTuple _s_x + ";\n"
-        _str += "  sy=" + formatTuple _s_y + ";\n"
-        _str += "  sz=" + formatTuple _s_z + ";\n"
+        --_str += "  sx=" + formatTuple _s_x + ";\n"
+        --_str += "  sy=" + formatTuple _s_y + ";\n"
+        --_str += "  sz=" + formatTuple _s_z + ";\n"
 
         --parameters
         _fov = getPropertyValues _o "fov"
@@ -301,7 +301,7 @@ fn exportCameras _step:1 _substeps:1 = (
 
         --if target
         if _o.target != undefined do
-            _str += "  target=" + normalizeName _o.target.name + ";\n"
+            _str += "  target=\"" + normalizeName _o.target.name + "\";\n"
 
         _str += "}\n\n"
     )
@@ -334,7 +334,7 @@ fn exportLights _step:1 _substeps:1 = (
 
         --if target
         if _o.target != undefined do (
-            _str += "TargetNode " + normalizeName _o.target.name + " {\n"
+            _str += "TargetObject " + normalizeName _o.target.name + " {\n"
             _t_t = maxToHoudiniGetTransforms _o.target _prerotate:false
             _t_p_x = for i in _t_t collect ( #( i[1], i[2].position.x / 100. ) )
             _t_p_y = for i in _t_t collect ( #( i[1], i[2].position.y / 100. ) )
@@ -366,18 +366,18 @@ fn exportLights _step:1 _substeps:1 = (
         _type = ""
         if classOf _o == VRayLight then (
             case _o.type of (
-                0 : _type = "VRayNodeLightRectangle"
-                1 : _type = "VRayNodeLightDome"
-                2 : _type = "VRayNodeLightSphere"
-                3 : _type = "VRayNodeLightMesh"
-                4 : _type = "VRayNodeLightRectangle"
+                0 : _type = "LightRectangle"
+                1 : _type = "LightDome"
+                2 : _type = "LightSphere"
+                3 : _type = "LightMesh"
+                4 : _type = "LightRectangle"
             )
         )else if classOf _o == VRaySun then (
-            _type = "VRayNodeSunLight"
+            _type = "SunLight"
         )else if classOf _o == VRayAmbientLight then (
-            _type = "VRayNodeLightAmbient"
+            _type = "LightAmbient"
         )else if classOf _o == VRayIES then (
-            _type = "VRayNodeLightIES"
+            _type = "LightIES"
         )
 
         _str += _type + " " + normalizeName  _o.name + " {\n"
@@ -415,9 +415,9 @@ fn exportLights _step:1 _substeps:1 = (
         )
 
         --scale
-        _str += "  sx=" + formatTuple _s_x + ";\n"
-        _str += "  sy=" + formatTuple _s_y + ";\n"
-        _str += "  sz=" + formatTuple _s_z + ";\n"
+        --_str += "  sx=" + formatTuple _s_x + ";\n"
+        --_str += "  sy=" + formatTuple _s_y + ";\n"
+        --_str += "  sz=" + formatTuple _s_z + ";\n"
 
         --parameters
         if classOf _o == VRayLight then
@@ -579,6 +579,11 @@ fn exportLights _step:1 _substeps:1 = (
             _str += "  affectSpecular=" + formatBoolean(_o.affect_specular as string) + ";\n"
             _str += "  specular_contribution=" + _o.specular_contribution as string + ";\n"
         )
+
+        --if target
+        if _o.target != undefined do
+            _str += "  target=\"" + normalizeName _o.target.name + "\";\n"
+
         _str += "}\n\n"
     )
     _str
@@ -586,11 +591,12 @@ fn exportLights _step:1 _substeps:1 = (
 
 
 fn exportCustomSettings = (
-    _rendercam = if getActiveCamera() != undefined then (getActiveCamera()).name else ""
+    _name = normalizeName( getFilenameFile maxfilename )
+    _cam = if getActiveCamera() != undefined then normalizeName( (getActiveCamera()).name ) else ""
     _fps = (framerate as float) as string
     _range = [animationrange.start.frame as integer , animationrange.end.frame as integer] as string
 
-    _str = "CustomSettings scene_settings {\n  camera=\"" + _rendercam + "\";\n  fps=" + _fps + ";\n  range=" + _range + ";\n}\n"
+    _str = "CustomSettings scene_settings {\n  name=\"" + _name + "\";\n  camera=\"" + _cam + "\";\n  fps=" + _fps + ";\n  range=" + _range + ";\n}\n"
 
     _aa_filter = if renderers.current.filter_on == false then 0 else filter_kernel_convert renderers.current.filter_kernel as string
 
@@ -623,7 +629,7 @@ fn writeVRScenefiles = (
     writeToFile ( _vrscenefile + "_settings.vrscene" ) (exportCustomSettings())
     writeToFile ( _vrscenefile + "_geometries.vrscene" ) (exportGeometries())
     writeToFile ( _vrscenefile + "_cameras.vrscene" ) (exportCameras())
-    writeToFile ( _vrscenefile + "_lights.vrscene" ) (exportLights())
+    --writeToFile ( _vrscenefile + "_lights.vrscene" ) (exportLights()) --already exists
 
     print "scene successfully exported"
 )

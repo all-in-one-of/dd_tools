@@ -8,10 +8,11 @@ try:
 except ImportError:
     from Qt import QtWidgets, QtCore, QtGui
 
-global re, setTimelineRange, parse_vrscene_file, import_scene_from_clipboard, get_vray_rop_node, try_parse_parm_value, normalize_name, try_create_node, try_set_parm, load_settings, load_cameras, load_lights, load_render_channels, get_render_channels_container, load_nodes, load_materials, try_set_input, get_material_output, add_plugin_node, revert_parms_to_default, load_environments, get_environment_settings, find_or_create_user_color, add_vray_objectid_param_template, add_scene_wirecolor_visualizer, try_find_or_create_node
+global re, set_timeline_range, parse_vrscene_file, import_scene_from_clipboard, get_vray_rop_node, try_parse_parm_value, normalize_name, try_create_node, try_set_parm, load_settings, load_cameras, load_lights, load_render_channels, get_render_channels_container, load_nodes, load_materials, try_set_input, get_material_output, add_plugin_node, revert_parms_to_default, load_environments, get_environment_settings, find_or_create_user_color, add_vray_objectid_param_template, add_scene_wirecolor_visualizer, try_find_or_create_node, try_find_or_create_target_object, init_constraint, format_value
 
 
-def parse_vrscene_file(fname, plugins, cameras, lights, settings, renderChannels, nodes, environments, geometries):
+def parse_vrscene_file(fname, plugins, cameras, lights, settings, renderChannels, nodes, environments, geometries,
+                       targetObjects, black_listed_parms=()):
     content = None
 
     with open(fname, 'r') as content_file:
@@ -45,8 +46,10 @@ def parse_vrscene_file(fname, plugins, cameras, lights, settings, renderChannels
                 split = p.strip().split('=', 1)
                 if len(split) == 2:
                     parm_name = split[0]
-                    parm_val = split[1]
-                    parms.append({'Name': parm_name, 'Value': parm_val})
+
+                    if not parm_name in black_listed_parms:
+                        parm_val = split[1]
+                        parms.append({'Name': parm_name, 'Value': parm_val})
 
             if type == 'Node':
                 nodes.append({'Type': type, 'Name': name, 'Parms': parms})
@@ -73,6 +76,10 @@ def parse_vrscene_file(fname, plugins, cameras, lights, settings, renderChannels
             elif 'Camera' in type:
                 cameras.append({'Type': type, 'Name': name, 'Parms': parms})
 
+            # catch target objects
+            elif 'Target' in type:
+                targetObjects.append({'Type': type, 'Name': name, 'Parms': parms})
+
             # catch geometries
             elif 'Geometry' in type:
                 geometries.append({'Type': type, 'Name': name, 'Parms': parms})
@@ -98,7 +105,9 @@ def get_vray_rop_node():
     return vray_rop
 
 
-def try_parse_parm_value(name, parm_name, parm_val, message_stack):
+def try_parse_parm_value(name, type, parm_name, parm_val, message_stack):
+    metric_parms = (('SettingsCameraDof', 'aperture'), ('SettingsCameraDof', 'focal_dist'))
+
     result = parm_val
 
     try:
@@ -113,6 +122,11 @@ def try_parse_parm_value(name, parm_name, parm_val, message_stack):
                     result = 3
                 if parm_val == 'spherical_vray':
                     result = 6
+
+        elif parm_val.startswith('Keys'):
+            # Transform(Matrix(Vector(1, 0, 0), Vector(0, 1, 0), Vector(0, 0, 1)), Vector(0, 0, 0))
+            result = re.match(r"Keys\((.*?.*)\)", parm_val)
+            result = eval('(' + result.group(1).replace('Keys', '') + ')')
 
         elif parm_val.startswith('Matrix'):
             # Transform(Matrix(Vector(1, 0, 0), Vector(0, 1, 0), Vector(0, 0, 1)), Vector(0, 0, 0))
@@ -145,6 +159,9 @@ def try_parse_parm_value(name, parm_name, parm_val, message_stack):
         else:
             result = eval(parm_val)
 
+            if (parm_name) in metric_parms:
+                result /= 100
+
     except:
         if not '@' in str(parm_val) and not 'bitmapBuffer' in str(parm_val):
             message_stack.append('Warning - cannot parsing value: ' + str(
@@ -154,28 +171,39 @@ def try_parse_parm_value(name, parm_name, parm_val, message_stack):
 
 
 def try_set_parm(node, parm_name, parm_val, message_stack):
-    global black_listed_parms
+    try:
+        if isinstance(parm_val, tuple):
+            for k in parm_val:
+                setKey = hou.Keyframe()
+                setKey.setFrame(k[0])
+                setKey.setValue(k[1])
+                node.parm(parm_name).setKeyframe(setKey)
 
-    if not parm_name in black_listed_parms:
-        try:
-            if isinstance(parm_val, hou.Vector3) or isinstance(parm_val, hou.Vector4):
-                node.parmTuple(parm_name).set(parm_val)
+        elif isinstance(parm_val, hou.Vector3) or isinstance(parm_val, hou.Vector4):
+            node.parmTuple(parm_name).set(parm_val)
 
-            elif isinstance(parm_val, hou.Matrix3):
-                node.parmTuple(parm_name).set(parm_val.asTuple())
+        elif isinstance(parm_val, hou.Matrix3):
+            node.parmTuple(parm_name).set(parm_val.asTuple())
 
-            else:
-                node.parm(parm_name).set(parm_val)
+        else:
+            node.parm(parm_name).set(parm_val)
 
-        except:
-            message_stack.append('Cannot set parm on ' + node.name() + ' ' + parm_name + ' = ' + str(
-                parm_val))
+    except:
+        message_stack.append('Cannot set parm on ' + node.name() + ' ' + parm_name + ' = ' + str(
+            parm_val))
 
 
-def setTimelineRange(start, end):
+def set_timeline_range(start, end):
     setGobalFrangeExpr = 'tset `(%d-1)/$FPS` `%d/$FPS`' % (start, end)
     hou.hscript(setGobalFrangeExpr)
     hou.playbar.setPlaybackRange(start, end)
+
+
+def format_value(value):
+    result = str(value)
+    if isinstance(value, (str, unicode)):
+        result = '"' + str(value) + '"'
+    return result
 
 
 def load_settings(settings):
@@ -193,18 +221,22 @@ def load_settings(settings):
     for s in settings:
         for p in s['Parms']:
             parm_name = p['Name']
-            parm_val = try_parse_parm_value(s['Name'], parm_name, p['Value'], message_stack)
+            parm_val = try_parse_parm_value(s['Name'], s['Type'], parm_name, p['Value'], message_stack)
+
+            print s['Type'] + '_' + parm_name + ' = ' + format_value(parm_val)
 
             if s['Type'] == 'CustomSettings':
-                print parm_name + " = " + str(parm_val)
-
-                if parm_name == 'camera':
-                    if parm_val != '':
-                        try_set_parm(vray_rop, 'render_camera', '/obj/' + parm_val, message_stack)
+                if parm_name == 'name':
+                    hou.hipFile.setName(parm_val)
+                elif parm_name == 'camera':
+                    cam = hou.node('/obj/' + parm_val)
+                    if cam != None:
+                        try_set_parm(vray_rop, 'render_camera', cam.path(), message_stack)
+                        hou.ui.paneTabOfType(hou.paneTabType.SceneViewer).curViewport().setCamera(cam)
                 elif parm_name == 'fps':
                     hou.setFps(parm_val)
                 elif parm_name == 'range':
-                    setTimelineRange(parm_val[0], parm_val[1])
+                    set_timeline_range(parm_val[0], parm_val[1])
 
             else:
                 if s['Type'] == 'SettingsGI':
@@ -214,7 +246,6 @@ def load_settings(settings):
                         elif parm_val == 3:
                             parm_val = 2
 
-                print s['Type'] + '_' + parm_name + " = " + str(parm_val)
                 try_set_parm(vray_rop, s['Type'] + '_' + parm_name, parm_val, message_stack)
 
     if len(message_stack) != 0:
@@ -224,7 +255,96 @@ def load_settings(settings):
         print m
 
 
-def load_cameras(cameras):
+def init_constraint(node, target):
+    constraints = node.createNode('chopnet', 'constraints')
+
+    parm_group = constraints.parmTemplateGroup()
+    parm_group.addParmTemplate(hou.IntParmTemplate('chopnet_rate', 'CHOP Rate', 1))
+    parm_group.addParmTemplate(hou.IntParmTemplate('motionsamples', 'CHOP Motion Samples', 1))
+    constraints.setParmTemplateGroup(parm_group)
+
+    constraints.parm('chopnet_rate').setExpression('$FPS * ch("motionsamples")')
+    constraints.parm('motionsamples').setExpression('$CHOPMOTIONSAMPLES')
+    constraints.moveToGoodPosition()
+
+    node.parm('constraints_on').set(1)
+    node.parm('constraints_path').set('constraints')
+
+    constraintlookat = constraints.createNode('constraintlookat', 'lookat')
+    constraintlookat.parm('vex_range').set(1)
+    constraintlookat.parm('vex_rate').setExpression('ch("../chopnet_rate")')
+    constraintlookat.parm('export').set('../..')
+    constraintlookat.parm('gcolorr').set(0)
+    constraintlookat.parm('gcolorg').set(0)
+    constraintlookat.parm('gcolorb').set(0.9)
+
+    constraintgetworldspace = constraints.createNode('constraintgetworldspace', 'getworldspace')
+    constraintgetworldspace.parm('obj_path').set('../..')
+    constraintgetworldspace.parm('vex_range').set(1)
+    constraintgetworldspace.parm('vex_rate').setExpression('ch("../chopnet_rate")')
+    constraintgetworldspace.parm('export').set('../..')
+    constraintgetworldspace.parm('gcolorr').set(0.9)
+    constraintgetworldspace.parm('gcolorg').set(0)
+    constraintgetworldspace.parm('gcolorb').set(0)
+
+    constraintobject = constraints.createNode('constraintobject', 'target_node')
+    constraintobject.parm('obj_path').setExpression('chsop("../../lookat_target")')
+    constraintobject.parm('vex_range').set(1)
+    constraintobject.parm('vex_rate').setExpression('ch("../chopnet_rate")')
+    constraintobject.parm('export').set('../..')
+    constraintobject.parm('gcolorr').set(0.9)
+    constraintobject.parm('gcolorg').set(0.9)
+    constraintobject.parm('gcolorb').set(0)
+
+    constraintlookat.setInput(0, constraintgetworldspace)
+    constraintlookat.setInput(1, constraintobject)
+    constraints.layoutChildren()
+
+
+def try_find_or_create_target_object(parent, node, name, target_objects, message_stack):
+    print '\n\n' + name + ' ( TargetObject ) \n'
+
+    target = try_create_node(parent, 'null', name, message_stack)
+
+    if target != None:
+
+        parm_group = target.parmTemplateGroup()
+        parm_group.insertBefore(parm_group.findFolder("Transform"), hou.StringParmTemplate('lookat_parent', 'Parent', 1,
+                                                                                           string_type=hou.stringParmType.NodeReference))
+        target.setParmTemplateGroup(parm_group)
+        target.parm('lookat_parent').set(node.path())
+
+        parm_group = node.parmTemplateGroup()
+        parm_group.insertBefore(parm_group.findFolder("Transform"), hou.StringParmTemplate('lookat_target', 'Target', 1,
+                                                                                           string_type=hou.stringParmType.NodeReference))
+
+        node.setParmTemplateGroup(parm_group)
+        node.parm('lookat_target').set(target.path())
+
+        init_constraint(node, target)
+        node.node('constraints').node('lookat').parm('twist').setExpression('ch("../../rz")')
+
+        # target.parmTuple('dcolor').set(hou.Vector3(node.color().rgb()))
+        target.parmTuple('dcolor').set(hou.Vector3())
+        target.parm('geoscale').set(0.2)
+        target.parm('controltype').set(2)
+        target.setUserData('nodeshape', 'circle')
+        target.setColor(node.color())
+        target.setPosition(node.position() + hou.Vector2(0, -1))
+
+        for t in target_objects:
+            if t['Name'] == name:
+
+                for p in t['Parms']:
+                    parm_val = try_parse_parm_value(name, 'TargetObject', p['Name'], p['Value'], message_stack)
+
+                    print p['Name'] + " = " + str(parm_val)
+                    try_set_parm(target, p['Name'], parm_val, message_stack)
+
+                break
+
+
+def load_cameras(cameras, target_objects):
     # loading settings
     message_stack = list()
     obj = hou.node('/obj')
@@ -234,16 +354,21 @@ def load_cameras(cameras):
     print '#############################################\n\n'
 
     for c in cameras:
-        name = c['Name'].split('@', 1)[0]
 
-        print name + " ( " + c['Type'] + ' ) \n'
+        print c['Name'] + ' ( ' + c['Type'] + ' ) \n'
 
-        '''for p in c['Parms']:
-            parm_name = p['Name']
-            parm_val = try_parse_parm_value(c['Name'], parm_name, p['Value'], message_stack)
+        camera = try_create_node(obj, 'cam', c['Name'], message_stack)
 
-            print c['Type'] + '_' + parm_name + " = " + str(parm_val)
-            try_set_parm(vray_rop, s['Type'] + '_' + parm_name, parm_val, message_stack)'''
+        if camera != None:
+            for p in c['Parms']:
+                parm_name = p['Name']
+                parm_val = try_parse_parm_value(c['Name'], c['Type'], parm_name, p['Value'], message_stack)
+
+                if parm_name == 'target':
+                    try_find_or_create_target_object(obj, camera, parm_val, target_objects, message_stack)
+                else:
+                    print parm_name + " = " + str(parm_val)
+                    try_set_parm(camera, parm_name, parm_val, message_stack)
 
         print '\n\n'
 
@@ -254,7 +379,7 @@ def load_cameras(cameras):
         print m
 
 
-def load_lights(lights):
+def load_lights(lights, target_objects):
     # loading settings
     message_stack = list()
     obj = hou.node('/obj')
@@ -264,25 +389,28 @@ def load_lights(lights):
     print '#############################################\n\n'
 
     for l in lights:
-        name = l['Name'].split('@', 1)[0]
 
         # particular case for 'Max' types, need conversion
-        if l['Type'] == 'LightOmniMax':
-            l['Type'] = 'LightOmni'
+        '''if l['Type'] == 'LightOmniMax':
+            l['Type'] = 'LightOmni'''
 
-        print name + " ( " + l['Type'] + ' ) \n'
+        print l['Name'] + ' ( ' + l['Type'] + ' ) \n'
 
-        light = obj.node(name)
-        if light == None:
-            light = obj.createNode('VRayNode' + l['Type'])
-            light.setName(name)
+        light = try_create_node(obj, 'VRayNode' + l['Type'], l['Name'], message_stack)
 
-        for p in l['Parms']:
-            parm_name = p['Name']
-            parm_val = try_parse_parm_value(l['Name'], parm_name, p['Value'], message_stack)
+        if light != None:
+            light.setColor(hou.Color(1, 0.898039, 0))
+            light.setUserData('nodeshape', 'light')
 
-            print l['Type'] + '_' + parm_name + " = " + str(parm_val)
-            try_set_parm(light, parm_name, parm_val, message_stack)
+            for p in l['Parms']:
+                parm_name = p['Name']
+                parm_val = try_parse_parm_value(l['Name'], l['Type'], parm_name, p['Value'], message_stack)
+
+                if parm_name == 'target':
+                    try_find_or_create_target_object(obj, light, parm_val, target_objects, message_stack)
+                else:
+                    print parm_name + " = " + str(parm_val)
+                    try_set_parm(light, parm_name, parm_val, message_stack)
 
         print '\n\n'
 
@@ -381,7 +509,7 @@ def load_render_channels(renderChannels):
         name = s['Name'].split('@', 1)[0]
         type = s['Type']
 
-        print name + " ( " + s['Type'] + ' ) \n'
+        print name + ' ( ' + s['Type'] + ' ) \n'
 
         render_channel = try_create_node(render_channels_rop, 'VRayNode' + s['Type'], name, message_stack)
 
@@ -390,7 +518,7 @@ def load_render_channels(renderChannels):
 
             for p in s['Parms']:
                 parm_name = p['Name']
-                parm_val = try_parse_parm_value(s['Name'], parm_name, p['Value'], message_stack)
+                parm_val = try_parse_parm_value(s['Name'], s['Type'], parm_name, p['Value'], message_stack)
 
                 if type == 'RenderChannelColor' and parm_name == 'alias':
                     parm_val -= 100  # item numbering from max starts at 100
@@ -480,13 +608,13 @@ def load_nodes(nodes, geometries, materials):
                 parm_val = p['Value']
 
                 if parm_name == 'filename':
-                    from_filename = try_parse_parm_value(name, parm_name, parm_val, message_stack)
+                    from_filename = try_parse_parm_value(name, n['Type'], parm_name, parm_val, message_stack)
                 elif parm_name == 'object_id':
-                    object_id = try_parse_parm_value(name, parm_name, parm_val, message_stack)
+                    object_id = try_parse_parm_value(name, n['Type'], parm_name, parm_val, message_stack)
                 elif parm_name == 'wirecolor':
-                    wirecolor = try_parse_parm_value(name, parm_name, parm_val, message_stack)
+                    wirecolor = try_parse_parm_value(name, n['Type'], parm_name, parm_val, message_stack)
                 elif parm_name == 'handle':
-                    handle = try_parse_parm_value(name, parm_name, parm_val, message_stack)
+                    handle = try_parse_parm_value(name, n['Type'], parm_name, parm_val, message_stack)
 
             # copy cache file from temp location to .hip/geo dir
             if os.path.isfile(from_filename):
@@ -591,7 +719,7 @@ def add_plugin_node(plugins, parent, output_node, input_name, node_name, node_ty
         for p in node_parms:
             parm_name = p['Name']
             parm_val = p['Value']
-            parm_val = try_parse_parm_value(node_name, parm_name, p['Value'], message_stack)
+            parm_val = try_parse_parm_value(node_name, node_type, parm_name, p['Value'], message_stack)
 
             if node_type == 'BRDFBump' and parm_name == 'bump_tex':
                 parm_name = 'bump_tex_color'  # to test !...
@@ -615,7 +743,7 @@ def add_plugin_node(plugins, parent, output_node, input_name, node_name, node_ty
                     message_stack.append('unknown mapping_type value: "' + str(parm_val) + '" on node: ' + node.name())
                     parm_val = 2
 
-                # if (node_type == 'UVWGenChannel' or node_type == 'UVWGenEnvironment') and parm_name == 'uvw_transform':
+                    # if (node_type == 'UVWGenChannel' or node_type == 'UVWGenEnvironment') and parm_name == 'uvw_transform':
             if parm_name == 'uvw_transform':
 
                 makexform = try_find_or_create_node(parent, 'makexform', node.name() + '_transform', message_stack)
@@ -642,7 +770,7 @@ def add_plugin_node(plugins, parent, output_node, input_name, node_name, node_ty
                         matrix3[1, 0, 0][0, 0, 1][0, -1, 0][0, 0, 0])'''
 
                     rot = parm_val.extractRotates()
-                    quat = hou.Quaternion(hou.hmath.buildRotate((rot[0]-90,rot[2], rot[1]), "xyz"))
+                    quat = hou.Quaternion(hou.hmath.buildRotate((rot[0] - 90, rot[2], rot[1]), "xyz"))
                     m3 = quat.extractRotationMatrix3().transposed()
 
                     try_set_parm(matrix, 'parmname', 'uvw_matrix', message_stack)
@@ -818,7 +946,7 @@ def load_environments(plugins, environments):
 
     for p in environments:
         parm_name = p['Name']
-        parm_val = try_parse_parm_value(output_node, parm_name, p['Value'], message_stack)
+        parm_val = try_parse_parm_value(output_node, 'SettingsEnvironment', parm_name, p['Value'], message_stack)
 
         print parm_name + " = " + str(parm_val)
 
@@ -850,40 +978,56 @@ def import_scene_from_clipboard():
     cameras = list()
     lights = list()
     settings = list()
-    renderChannels = list()
+    render_channels = list()
     nodes = list()
     materials = list()
     environments = list()
     geometries = list()
-
-    global black_listed_parms
+    target_objects = list()
 
     # some black listed parameters, sometimes not yet implemented, or no need to be implemented...
     black_listed_parms = (
-        'roughness_model', 'option_use_roughness', 'subdivs_as_samples', 'enableDeepOutput', 'adv_exposure_mode',
-        'adv_printer_lights_per', 'SettingsRTEngine_low_gpu_thread_priority', 'SettingsRTEngine_interactive',
-        'SettingsRTEngine_enable_cpu_interop', 'SettingsUnitsInfo_meters_scale', 'SettingsUnitsInfo_photometric_scale',
-        'SettingsUnitsInfo_scene_upDir', 'SettingsUnitsInfo_seconds_scale', 'SettingsUnitsInfo_frames_scale',
-        'SettingsUnitsInfo_rgb_color_space', 'SettingsImageSampler_progressive_effectsUpdate',
-        'SettingsImageSampler_render_mask_clear', 'SettingsLightCache_premultiplied',
-        'SettingsIrradianceMap_detail_enhancement', 'SettingsPhotonMap_bounces', 'SettingsPhotonMap_max_photons',
-        'SettingsPhotonMap_prefilter', 'SettingsPhotonMap_prefilter_samples', 'SettingsPhotonMap_mode',
-        'SettingsPhotonMap_auto_search_distance', 'SettingsPhotonMap_search_distance',
-        'SettingsPhotonMap_convex_hull_estimate', 'SettingsPhotonMap_dont_delete', 'SettingsPhotonMap_auto_save',
-        'SettingsPhotonMap_auto_save_file', 'SettingsPhotonMap_store_direct_light', 'SettingsPhotonMap_multiplier',
-        'SettingsPhotonMap_max_density', 'SettingsPhotonMap_retrace_corners', 'SettingsPhotonMap_retrace_bounces',
-        'SettingsPhotonMap_show_calc_phase', 'SettingsDMCSampler_path_sampler_type', 'SettingsVFB_bloom_on',
-        'SettingsVFB_bloom_fill_edges', 'SettingsVFB_bloom_weight', 'SettingsVFB_bloom_size', 'SettingsVFB_bloom_shape',
-        'SettingsVFB_bloom_mode', 'SettingsVFB_bloom_mask_intensity_on', 'SettingsVFB_bloom_mask_intensity',
-        'SettingsVFB_bloom_mask_objid_on', 'SettingsVFB_bloom_mask_objid', 'SettingsVFB_bloom_mask_mtlid_on',
-        'SettingsVFB_bloom_mask_mtlid', 'SettingsVFB_glare_on', 'SettingsVFB_glare_fill_edges',
-        'SettingsVFB_glare_weight', 'SettingsVFB_glare_size', 'SettingsVFB_glare_type', 'SettingsVFB_glare_mode',
-        'SettingsVFB_glare_image_path', 'SettingsVFB_glare_obstacle_image_path', 'SettingsVFB_glare_diffraction_on',
-        'SettingsVFB_glare_use_obstacle_image', 'SettingsVFB_glare_cam_blades_on', 'SettingsVFB_glare_cam_num_blades',
-        'SettingsVFB_glare_cam_rotation', 'SettingsVFB_glare_cam_fnumber', 'SettingsVFB_glare_mask_intensity_on',
-        'SettingsVFB_glare_mask_intensity', 'SettingsVFB_glare_mask_objid_on', 'SettingsVFB_glare_mask_objid',
-        'SettingsVFB_glare_mask_mtlid_on', 'SettingsVFB_glare_mask_mtlid', 'SettingsVFB_interactive',
-        'SettingsVFB_hardware_accelerated', 'SettingsVFB_display_srgb')
+        ('', 'roughness_model'), ('', 'option_use_roughness'), ('', 'subdivs_as_samples'), ('', 'enableDeepOutput'),
+        ('', 'adv_exposure_mode'), ('', 'adv_printer_lights_per'), ('SettingsRTEngine, low_gpu_thread_priority'),
+        ('SettingsRTEngine', 'interactive'), ('SettingsRTEngine', 'enable_cpu_interop'),
+        ('SettingsUnitsInfo', 'meters_scale'),
+        ('SettingsUnitsInfo', 'photometric_scale'), ('SettingsUnitsInfo', 'scene_upDir'),
+        ('SettingsUnitsInfo', 'seconds_scale'),
+        ('SettingsUnitsInfo', 'frames_scale'),
+        ('SettingsUnitsInfo', 'rgb_color_space'), ('SettingsImageSampler', 'progressive_effectsUpdate'),
+        ('SettingsImageSampler', 'render_mask_clear'), ('SettingsLightCache', 'premultiplied'),
+        ('SettingsIrradianceMap', 'detail_enhancement'), ('SettingsPhotonMap', 'bounces'),
+        ('SettingsPhotonMap', 'max_photons'),
+        ('SettingsPhotonMap', 'prefilter'), ('SettingsPhotonMap', 'prefilter_samples'), ('SettingsPhotonMap', 'mode'),
+        ('SettingsPhotonMap', 'auto_search_distance'), ('SettingsPhotonMap', 'search_distance'),
+        ('SettingsPhotonMap', 'convex_hull_estimate'), ('SettingsPhotonMap', 'dont_delete'),
+        ('SettingsPhotonMap', 'auto_save'),
+        ('SettingsPhotonMap', 'auto_save_file'), ('SettingsPhotonMap', 'store_direct_light'),
+        ('SettingsPhotonMap', 'multiplier'),
+        ('SettingsPhotonMap', 'max_density'), ('SettingsPhotonMap', 'retrace_corners'),
+        ('SettingsPhotonMap', 'retrace_bounces'),
+        ('SettingsPhotonMap', 'show_calc_phase'), ('SettingsDMCSampler', 'path_sampler_type'),
+        ('SettingsVFB', 'bloom_on'),
+        ('SettingsVFB', 'bloom_fill_edges'), ('SettingsVFB', 'bloom_weight'), ('SettingsVFB', 'bloom_size'),
+        ('SettingsVFB', 'bloom_shape'),
+        ('SettingsVFB', 'bloom_mode'), ('SettingsVFB', 'bloom_mask_intensity_on'),
+        ('SettingsVFB', 'bloom_mask_intensity'),
+        ('SettingsVFB', 'bloom_mask_objid_on'), ('SettingsVFB', 'bloom_mask_objid'),
+        ('SettingsVFB', 'bloom_mask_mtlid_on'),
+        ('SettingsVFB', 'bloom_mask_mtlid'), ('SettingsVFB', 'glare_on'), ('SettingsVFB', 'glare_fill_edges'),
+        ('SettingsVFB', 'glare_weight'), ('SettingsVFB', 'glare_size'), ('SettingsVFB', 'glare_type'),
+        ('SettingsVFB', 'glare_mode'),
+        ('SettingsVFB', 'glare_image_path'), ('SettingsVFB', 'glare_obstacle_image_path'),
+        ('SettingsVFB', 'glare_diffraction_on'),
+        ('SettingsVFB', 'glare_use_obstacle_image'), ('SettingsVFB', 'glare_cam_blades_on'),
+        ('SettingsVFB', 'glare_cam_num_blades'),
+        ('SettingsVFB', 'glare_cam_rotation'), ('SettingsVFB', 'glare_cam_fnumber'),
+        ('SettingsVFB', 'glare_mask_intensity_on'),
+        ('SettingsVFB', 'glare_mask_intensity'), ('SettingsVFB', 'glare_mask_objid_on'),
+        ('SettingsVFB', 'glare_mask_objid'),
+        ('SettingsVFB', 'glare_mask_mtlid_on'), ('SettingsVFB', 'glare_mask_mtlid'), ('SettingsVFB', 'interactive'),
+        ('SettingsVFB', 'hardware_accelerated'), ('SettingsVFB', 'display_srgb')
+    )
 
     # clear console
     print '\n' * 5000
@@ -895,16 +1039,16 @@ def import_scene_from_clipboard():
                 ls = line.split(',', 1)
                 if len(ls) == 2:
                     if ls[0] == 'filename':
-                        parse_vrscene_file(ls[1], plugins, cameras, lights, settings, renderChannels, nodes,
-                                           environments, geometries)
+                        parse_vrscene_file(ls[1], plugins, cameras, lights, settings, render_channels, nodes,
+                                           environments, geometries, target_objects, black_listed_parms)
 
-                        load_settings(settings)
-                        load_render_channels(renderChannels)
-                        # load_cameras(cameras)
-                        # load_lights(lights)
+                        load_render_channels(render_channels)
+                        load_cameras(cameras, target_objects)
+                        load_lights(lights, target_objects)
                         load_nodes(nodes, geometries, materials)
                         load_materials(plugins, materials)
                         load_environments(plugins, environments)
+                        load_settings(settings)
 
             print '\nScene import finished'
 
