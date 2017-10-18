@@ -12,9 +12,65 @@ except ImportError:
 
 global re, sys, timeit, set_timeline_range, parse_vrscene_file, import_scene_from_clipboard, get_vray_rop_node, try_parse_parm_value, normalize_name, try_create_node, try_set_parm, load_settings, load_cameras, load_lights, load_render_channels, get_render_channels_container, load_nodes, load_materials, try_set_input, get_material_output, add_plugin_node, revert_parms_to_default, load_environments, get_environment_settings, find_or_create_user_color, add_vray_objectid_param_template, add_scene_wirecolor_visualizer, try_find_or_create_node, try_find_or_create_target_object, init_constraint, format_value, format_elapsed_time
 
+metric_parms = (('SettingsCameraDof', 'aperture'), ('SettingsCameraDof', 'focal_dist'))  # parameters that need to be scaled
+
+black_listed_parms = (('BRDFVRayMtl', 'roughness_model'), ('BRDFVRayMtl', 'option_use_roughness'),
+                      ('RenderChannelDRBucket', 'enableDeepOutput'), ('RenderChannelDenoiser', 'enableDeepOutput'),
+                      ('RenderChannelColor', 'enableDeepOutput'), ('RenderChannelBumpNormals', 'enableDeepOutput'),
+                      ('RenderChannelNormals', 'enableDeepOutput'), ('RenderChannelExtraTex', 'enableDeepOutput'),
+                      ('RenderChannelNodeID', 'enableDeepOutput'), ('RenderChannelRenderID', 'enableDeepOutput'),
+                      ('RenderChannelVelocity', 'enableDeepOutput'), ('RenderChannelZDepth', 'enableDeepOutput'),
+                      ('ColorCorrection', 'adv_exposure_mode'), ('ColorCorrection', 'adv_printer_lights_per'),
+                      ('SettingsRTEngine', 'low_gpu_thread_priority'),
+                      ('SettingsRTEngine', 'interactive'), ('SettingsRTEngine', 'enable_cpu_interop'),
+                      ('SettingsUnitsInfo', 'meters_scale'),
+                      ('SettingsUnitsInfo', 'photometric_scale'), ('SettingsUnitsInfo', 'scene_upDir'),
+                      ('SettingsUnitsInfo', 'seconds_scale'),
+                      ('SettingsUnitsInfo', 'frames_scale'),
+                      ('SettingsUnitsInfo', 'rgb_color_space'), ('SettingsImageSampler', 'progressive_effectsUpdate'),
+                      ('SettingsImageSampler', 'render_mask_clear'), ('SettingsLightCache', 'premultiplied'),
+                      ('SettingsIrradianceMap', 'detail_enhancement'), ('SettingsPhotonMap', 'bounces'),
+                      ('SettingsPhotonMap', 'max_photons'),
+                      ('SettingsPhotonMap', 'prefilter'), ('SettingsPhotonMap', 'prefilter_samples'),
+                      ('SettingsPhotonMap', 'mode'),
+                      ('SettingsPhotonMap', 'auto_search_distance'), ('SettingsPhotonMap', 'search_distance'),
+                      ('SettingsPhotonMap', 'convex_hull_estimate'), ('SettingsPhotonMap', 'dont_delete'),
+                      ('SettingsPhotonMap', 'auto_save'),
+                      ('SettingsPhotonMap', 'auto_save_file'), ('SettingsPhotonMap', 'store_direct_light'),
+                      ('SettingsPhotonMap', 'multiplier'),
+                      ('SettingsPhotonMap', 'max_density'), ('SettingsPhotonMap', 'retrace_corners'),
+                      ('SettingsPhotonMap', 'retrace_bounces'),
+                      ('SettingsPhotonMap', 'show_calc_phase'), ('SettingsDMCSampler', 'path_sampler_type'),
+                      ('SettingsVFB', 'bloom_on'),
+                      ('SettingsVFB', 'bloom_fill_edges'), ('SettingsVFB', 'bloom_weight'),
+                      ('SettingsVFB', 'bloom_size'),
+                      ('SettingsVFB', 'bloom_shape'),
+                      ('SettingsVFB', 'bloom_mode'), ('SettingsVFB', 'bloom_mask_intensity_on'),
+                      ('SettingsVFB', 'bloom_mask_intensity'),
+                      ('SettingsVFB', 'bloom_mask_objid_on'), ('SettingsVFB', 'bloom_mask_objid'),
+                      ('SettingsVFB', 'bloom_mask_mtlid_on'),
+                      ('SettingsVFB', 'bloom_mask_mtlid'), ('SettingsVFB', 'glare_on'),
+                      ('SettingsVFB', 'glare_fill_edges'),
+                      ('SettingsVFB', 'glare_weight'), ('SettingsVFB', 'glare_size'), ('SettingsVFB', 'glare_type'),
+                      ('SettingsVFB', 'glare_mode'),
+                      ('SettingsVFB', 'glare_image_path'), ('SettingsVFB', 'glare_obstacle_image_path'),
+                      ('SettingsVFB', 'glare_diffraction_on'),
+                      ('SettingsVFB', 'glare_use_obstacle_image'), ('SettingsVFB', 'glare_cam_blades_on'),
+                      ('SettingsVFB', 'glare_cam_num_blades'),
+                      ('SettingsVFB', 'glare_cam_rotation'), ('SettingsVFB', 'glare_cam_fnumber'),
+                      ('SettingsVFB', 'glare_mask_intensity_on'),
+                      ('SettingsVFB', 'glare_mask_intensity'), ('SettingsVFB', 'glare_mask_objid_on'),
+                      ('SettingsVFB', 'glare_mask_objid'),
+                      ('SettingsVFB', 'glare_mask_mtlid_on'), ('SettingsVFB', 'glare_mask_mtlid'),
+                      ('SettingsVFB', 'interactive'),
+                      ('SettingsVFB', 'hardware_accelerated'), ('SettingsVFB',
+                                                                'display_srgb'))  # some black listed parameters, maybe not yet implemented or no need to be implemented...
+
 
 def parse_vrscene_file(fname, plugins, cameras, lights, settings, renderChannels, nodes, environments, geometries,
-                       targetObjects, black_listed_parms=()):
+                       targetObjects):
+    global black_listed_parms
+
     content = None
 
     with open(fname, 'r') as content_file:
@@ -108,7 +164,7 @@ def get_vray_rop_node():
 
 
 def try_parse_parm_value(name, type, parm_name, parm_val, message_stack):
-    metric_parms = (('SettingsCameraDof', 'aperture'), ('SettingsCameraDof', 'focal_dist'))
+    global metric_parms
 
     result = parm_val
 
@@ -171,7 +227,7 @@ def try_parse_parm_value(name, type, parm_name, parm_val, message_stack):
         else:
             result = eval(parm_val)
 
-            if (parm_name) in metric_parms:
+            if (type, parm_name) in metric_parms:
                 result /= 100
 
     except:
@@ -1033,56 +1089,6 @@ def import_scene_from_clipboard():
     geometries = list()
     target_objects = list()
 
-    # some black listed parameters, maybe not yet implemented or no need to be implemented...
-    black_listed_parms = (
-        ('BRDFVRayMtl', 'roughness_model'), ('BRDFVRayMtl', 'option_use_roughness'),
-        ('RenderChannelDRBucket', 'enableDeepOutput'), ('RenderChannelDenoiser', 'enableDeepOutput'),
-        ('RenderChannelColor', 'enableDeepOutput'), ('RenderChannelBumpNormals', 'enableDeepOutput'),
-        ('RenderChannelNormals', 'enableDeepOutput'), ('RenderChannelExtraTex', 'enableDeepOutput'),
-        ('RenderChannelNodeID', 'enableDeepOutput'), ('RenderChannelRenderID', 'enableDeepOutput'),
-        ('RenderChannelVelocity', 'enableDeepOutput'), ('RenderChannelZDepth', 'enableDeepOutput'),
-        ('ColorCorrection', 'adv_exposure_mode'), ('ColorCorrection', 'adv_printer_lights_per'),
-        ('SettingsRTEngine', 'low_gpu_thread_priority'),
-        ('SettingsRTEngine', 'interactive'), ('SettingsRTEngine', 'enable_cpu_interop'),
-        ('SettingsUnitsInfo', 'meters_scale'),
-        ('SettingsUnitsInfo', 'photometric_scale'), ('SettingsUnitsInfo', 'scene_upDir'),
-        ('SettingsUnitsInfo', 'seconds_scale'),
-        ('SettingsUnitsInfo', 'frames_scale'),
-        ('SettingsUnitsInfo', 'rgb_color_space'), ('SettingsImageSampler', 'progressive_effectsUpdate'),
-        ('SettingsImageSampler', 'render_mask_clear'), ('SettingsLightCache', 'premultiplied'),
-        ('SettingsIrradianceMap', 'detail_enhancement'), ('SettingsPhotonMap', 'bounces'),
-        ('SettingsPhotonMap', 'max_photons'),
-        ('SettingsPhotonMap', 'prefilter'), ('SettingsPhotonMap', 'prefilter_samples'), ('SettingsPhotonMap', 'mode'),
-        ('SettingsPhotonMap', 'auto_search_distance'), ('SettingsPhotonMap', 'search_distance'),
-        ('SettingsPhotonMap', 'convex_hull_estimate'), ('SettingsPhotonMap', 'dont_delete'),
-        ('SettingsPhotonMap', 'auto_save'),
-        ('SettingsPhotonMap', 'auto_save_file'), ('SettingsPhotonMap', 'store_direct_light'),
-        ('SettingsPhotonMap', 'multiplier'),
-        ('SettingsPhotonMap', 'max_density'), ('SettingsPhotonMap', 'retrace_corners'),
-        ('SettingsPhotonMap', 'retrace_bounces'),
-        ('SettingsPhotonMap', 'show_calc_phase'), ('SettingsDMCSampler', 'path_sampler_type'),
-        ('SettingsVFB', 'bloom_on'),
-        ('SettingsVFB', 'bloom_fill_edges'), ('SettingsVFB', 'bloom_weight'), ('SettingsVFB', 'bloom_size'),
-        ('SettingsVFB', 'bloom_shape'),
-        ('SettingsVFB', 'bloom_mode'), ('SettingsVFB', 'bloom_mask_intensity_on'),
-        ('SettingsVFB', 'bloom_mask_intensity'),
-        ('SettingsVFB', 'bloom_mask_objid_on'), ('SettingsVFB', 'bloom_mask_objid'),
-        ('SettingsVFB', 'bloom_mask_mtlid_on'),
-        ('SettingsVFB', 'bloom_mask_mtlid'), ('SettingsVFB', 'glare_on'), ('SettingsVFB', 'glare_fill_edges'),
-        ('SettingsVFB', 'glare_weight'), ('SettingsVFB', 'glare_size'), ('SettingsVFB', 'glare_type'),
-        ('SettingsVFB', 'glare_mode'),
-        ('SettingsVFB', 'glare_image_path'), ('SettingsVFB', 'glare_obstacle_image_path'),
-        ('SettingsVFB', 'glare_diffraction_on'),
-        ('SettingsVFB', 'glare_use_obstacle_image'), ('SettingsVFB', 'glare_cam_blades_on'),
-        ('SettingsVFB', 'glare_cam_num_blades'),
-        ('SettingsVFB', 'glare_cam_rotation'), ('SettingsVFB', 'glare_cam_fnumber'),
-        ('SettingsVFB', 'glare_mask_intensity_on'),
-        ('SettingsVFB', 'glare_mask_intensity'), ('SettingsVFB', 'glare_mask_objid_on'),
-        ('SettingsVFB', 'glare_mask_objid'),
-        ('SettingsVFB', 'glare_mask_mtlid_on'), ('SettingsVFB', 'glare_mask_mtlid'), ('SettingsVFB', 'interactive'),
-        ('SettingsVFB', 'hardware_accelerated'), ('SettingsVFB', 'display_srgb')
-    )
-
     # clear console
     # print '\n' * 5000
 
@@ -1102,7 +1108,7 @@ def import_scene_from_clipboard():
                 if len(ls) == 2:
                     if ls[0] == 'filename':
                         parse_vrscene_file(ls[1], plugins, cameras, lights, settings, render_channels, nodes,
-                                           environments, geometries, target_objects, black_listed_parms)
+                                           environments, geometries, target_objects)
 
                         load_cameras(cameras, target_objects)
                         load_lights(lights, target_objects)
