@@ -2,13 +2,15 @@ import hou
 import re
 import os.path
 import shutil
+import sys
+import timeit
 
 try:
     from PyQt5 import QtWidgets, QtCore, QtGui
 except ImportError:
     from Qt import QtWidgets, QtCore, QtGui
 
-global re, set_timeline_range, parse_vrscene_file, import_scene_from_clipboard, get_vray_rop_node, try_parse_parm_value, normalize_name, try_create_node, try_set_parm, load_settings, load_cameras, load_lights, load_render_channels, get_render_channels_container, load_nodes, load_materials, try_set_input, get_material_output, add_plugin_node, revert_parms_to_default, load_environments, get_environment_settings, find_or_create_user_color, add_vray_objectid_param_template, add_scene_wirecolor_visualizer, try_find_or_create_node, try_find_or_create_target_object, init_constraint, format_value
+global re, sys, timeit, set_timeline_range, parse_vrscene_file, import_scene_from_clipboard, get_vray_rop_node, try_parse_parm_value, normalize_name, try_create_node, try_set_parm, load_settings, load_cameras, load_lights, load_render_channels, get_render_channels_container, load_nodes, load_materials, try_set_input, get_material_output, add_plugin_node, revert_parms_to_default, load_environments, get_environment_settings, find_or_create_user_color, add_vray_objectid_param_template, add_scene_wirecolor_visualizer, try_find_or_create_node, try_find_or_create_target_object, init_constraint, format_value, format_elapsed_time
 
 
 def parse_vrscene_file(fname, plugins, cameras, lights, settings, renderChannels, nodes, environments, geometries,
@@ -47,7 +49,7 @@ def parse_vrscene_file(fname, plugins, cameras, lights, settings, renderChannels
                 if len(split) == 2:
                     parm_name = split[0]
 
-                    if not parm_name in black_listed_parms:
+                    if not (type, parm_name) in black_listed_parms:
                         parm_val = split[1]
                         parms.append({'Name': parm_name, 'Value': parm_val})
 
@@ -128,6 +130,12 @@ def try_parse_parm_value(name, type, parm_name, parm_val, message_stack):
             result = re.match(r"Keys\((.*?.*)\)", parm_val)
             result = eval('(' + result.group(1).replace('Keys', '') + ')')
 
+        elif parm_val.startswith('interpolate'):
+            # TEMP !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+            result = re.match(r"interpolate\((.*?.*)\)", parm_val, re.MULTILINE | re.DOTALL)
+            result = hou.Matrix3(
+                (eval(result.group(1).replace('\n', '').replace('Vector', '').replace('Matrix', '').strip()))[1])
+
         elif parm_val.startswith('Matrix'):
             # Transform(Matrix(Vector(1, 0, 0), Vector(0, 1, 0), Vector(0, 0, 1)), Vector(0, 0, 0))
             result = re.match(r"Matrix\((.*?.*)\)", parm_val)
@@ -144,6 +152,10 @@ def try_parse_parm_value(name, type, parm_name, parm_val, message_stack):
 
         elif parm_val.startswith('AColor'):
             result = hou.Vector4(eval(parm_val[6:]))
+
+        elif parm_val.startswith('ListFloat'):
+            result = (re.match(r"ListFloat\((.*?)\)", parm_val, re.MULTILINE | re.DOTALL)).group(
+                1).replace(' ', '').replace('\n', '').split(',')
 
         elif parm_val.startswith('ListInt'):
             result = (re.match(r"ListInt\((.*?)\)", parm_val, re.MULTILINE | re.DOTALL)).group(
@@ -189,7 +201,8 @@ def try_set_parm(node, parm_name, parm_val, message_stack):
             node.parm(parm_name).set(parm_val)
 
     except:
-        message_stack.append('Cannot set parm on ' + node.name() + ' ' + parm_name + ' = ' + str(
+        message_stack.append('Cannot set parm on ' + node.type().name().replace('VRayNode',
+                                                                                '') + ' ( ' + node.name() + ' ) ' + parm_name + ' = ' + str(
             parm_val))
 
 
@@ -250,6 +263,8 @@ def load_settings(settings):
 
     if len(message_stack) != 0:
         print '\n\n\nLoad Render Settings terminated with: ' + str(len(message_stack)) + ' errors:\n'
+    else:
+        print '\n\n\nLoad Render Settings terminated successfully\n'
 
     for m in message_stack:
         print m
@@ -373,7 +388,9 @@ def load_cameras(cameras, target_objects):
         print '\n\n'
 
     if len(message_stack) != 0:
-        print '\n\n\nLoad cameras terminated with: ' + str(len(message_stack)) + ' errors:\n'
+        print '\n\n\nLoad Cameras terminated with: ' + str(len(message_stack)) + ' errors:\n'
+    else:
+        print '\n\n\nLoad Cameras terminated successfully\n'
 
     for m in message_stack:
         print m
@@ -415,7 +432,9 @@ def load_lights(lights, target_objects):
         print '\n\n'
 
     if len(message_stack) != 0:
-        print '\n\n\nLoad lights terminated with: ' + str(len(message_stack)) + ' errors:\n'
+        print '\n\n\nLoad Lights terminated with: ' + str(len(message_stack)) + ' errors:\n'
+    else:
+        print '\n\n\nLoad Lights terminated successfully\n'
 
     for m in message_stack:
         print m
@@ -535,6 +554,8 @@ def load_render_channels(renderChannels):
 
     if len(message_stack) != 0:
         print '\n\n\nLoad Render Channels terminated with: ' + str(len(message_stack)) + ' errors:\n'
+    else:
+        print '\n\n\nLoad Render Channels terminated successfully\n'
 
     for m in message_stack:
         print m
@@ -672,6 +693,8 @@ def load_nodes(nodes, geometries, materials):
 
     if len(message_stack) != 0:
         print '\n\n\nLoad Scene Nodes terminated with: ' + str(len(message_stack)) + ' errors:\n'
+    else:
+        print '\n\n\nLoad Scene Nodes terminated successfully\n'
 
     for m in message_stack:
         print m
@@ -749,16 +772,22 @@ def add_plugin_node(plugins, parent, output_node, input_name, node_name, node_ty
                 makexform = try_find_or_create_node(parent, 'makexform', node.name() + '_transform', message_stack)
 
                 if makexform != None:
-                    result = hou.Matrix4(parm_val[0]).explode(transform_order='trs', rotate_order='xyz',
-                                                              pivot=hou.Vector3(0.5, 0.5, 0))  # , pivot=parm_val[1])
 
-                    # try_set_parm(xform, 'trans', result['translate'], message_stack)
-                    try_set_parm(makexform, 'trans', parm_val[1], message_stack)
-                    try_set_parm(makexform, 'rot', result['rotate'], message_stack)
-                    try_set_parm(makexform, 'scale', result['scale'], message_stack)
-                    try_set_parm(makexform, 'pivot', result['shear'], message_stack)
+                    try:
+                        result = hou.Matrix4(parm_val[0]).explode(transform_order='trs', rotate_order='xyz',
+                                                                  pivot=hou.Vector3(0.5, 0.5,
+                                                                                    0))  # , pivot=parm_val[1])
+
+                        # try_set_parm(xform, 'trans', result['translate'], message_stack)
+                        try_set_parm(makexform, 'trans', parm_val[1], message_stack)
+                        try_set_parm(makexform, 'rot', result['rotate'], message_stack)
+                        try_set_parm(makexform, 'scale', result['scale'], message_stack)
+                        try_set_parm(makexform, 'pivot', result['shear'], message_stack)
+                    except:
+                        message_stack.append('Cannot extract matrix4 transforms...')
 
                     try_set_input(node, 'uvw_transform', makexform, message_stack)
+
 
             # if (node_type == 'UVWGenChannel' or node_type == 'UVWGenEnvironment') and parm_name == 'uvw_matrix':
             elif parm_name == 'uvw_matrix':
@@ -769,13 +798,17 @@ def add_plugin_node(plugins, parent, output_node, input_name, node_name, node_ty
                     '''(preRotateX(matrix3[1, 0, 0][0, 0, 1][0, -1, 0][0, 0, 0]) - 90) * _t * inverse(
                         matrix3[1, 0, 0][0, 0, 1][0, -1, 0][0, 0, 0])'''
 
-                    rot = parm_val.extractRotates()
-                    quat = hou.Quaternion(hou.hmath.buildRotate((rot[0] - 90, rot[2], rot[1]), "xyz"))
-                    m3 = quat.extractRotationMatrix3().transposed()
-
                     try_set_parm(matrix, 'parmname', 'uvw_matrix', message_stack)
                     try_set_parm(matrix, 'parmtype', 13, message_stack)
-                    try_set_parm(matrix, 'float9def', m3, message_stack)
+
+                    try:
+                        rot = parm_val.extractRotates()
+                        quat = hou.Quaternion(hou.hmath.buildRotate((rot[0] - 90, rot[2], rot[1]), "xyz"))
+                        m3 = quat.extractRotationMatrix3().transposed()
+                        try_set_parm(matrix, 'float9def', m3, message_stack)
+                    except:
+                        message_stack.append('Cannot extract matrix3 rotations...')
+
                     try_set_parm(matrix, 'invisible', 1, message_stack)
                     try_set_parm(matrix, 'exportparm', 1, message_stack)
 
@@ -882,6 +915,8 @@ def load_materials(plugins, materials):
 
     if len(message_stack) != 0:
         print '\n\n\nLoad Scene materials terminated with: ' + str(len(message_stack)) + ' errors:\n'
+    else:
+        print '\n\n\nLoad Scene materials terminated successfully\n'
 
     for m in message_stack:
         print m
@@ -964,9 +999,22 @@ def load_environments(plugins, environments):
 
     if len(message_stack) != 0:
         print '\n\n\nLoad Scene environment terminated with: ' + str(len(message_stack)) + ' errors:\n'
+    else:
+        print '\n\n\nLoad Scene environment terminated successfully\n'
 
     for m in message_stack:
         print m
+
+
+def format_elapsed_time(elapsed):
+    if elapsed > 60 * 60:
+        elapsed /= 60 * 60
+        return str(float("{0:.2f}".format(elapsed))) + ' hours'
+    elif elapsed > 60:
+        elapsed /= 60
+        return str(float("{0:.2f}".format(elapsed))) + ' minutes'
+    else:
+        return str(float("{0:.2f}".format(elapsed))) + ' seconds'
 
 
 def import_scene_from_clipboard():
@@ -985,10 +1033,16 @@ def import_scene_from_clipboard():
     geometries = list()
     target_objects = list()
 
-    # some black listed parameters, sometimes not yet implemented, or no need to be implemented...
+    # some black listed parameters, maybe not yet implemented or no need to be implemented...
     black_listed_parms = (
-        ('', 'roughness_model'), ('', 'option_use_roughness'), ('', 'subdivs_as_samples'), ('', 'enableDeepOutput'),
-        ('', 'adv_exposure_mode'), ('', 'adv_printer_lights_per'), ('SettingsRTEngine, low_gpu_thread_priority'),
+        ('BRDFVRayMtl', 'roughness_model'), ('BRDFVRayMtl', 'option_use_roughness'),
+        ('RenderChannelDRBucket', 'enableDeepOutput'), ('RenderChannelDenoiser', 'enableDeepOutput'),
+        ('RenderChannelColor', 'enableDeepOutput'), ('RenderChannelBumpNormals', 'enableDeepOutput'),
+        ('RenderChannelNormals', 'enableDeepOutput'), ('RenderChannelExtraTex', 'enableDeepOutput'),
+        ('RenderChannelNodeID', 'enableDeepOutput'), ('RenderChannelRenderID', 'enableDeepOutput'),
+        ('RenderChannelVelocity', 'enableDeepOutput'), ('RenderChannelZDepth', 'enableDeepOutput'),
+        ('ColorCorrection', 'adv_exposure_mode'), ('ColorCorrection', 'adv_printer_lights_per'),
+        ('SettingsRTEngine', 'low_gpu_thread_priority'),
         ('SettingsRTEngine', 'interactive'), ('SettingsRTEngine', 'enable_cpu_interop'),
         ('SettingsUnitsInfo', 'meters_scale'),
         ('SettingsUnitsInfo', 'photometric_scale'), ('SettingsUnitsInfo', 'scene_upDir'),
@@ -1030,10 +1084,18 @@ def import_scene_from_clipboard():
     )
 
     # clear console
-    print '\n' * 5000
+    # print '\n' * 5000
 
     if lines.count > 1:
         if lines[0] == '#scene_export':
+
+            print '\nScene import started...'
+
+            start_time = timeit.default_timer()
+
+            old_stdout = sys.stdout
+            log_file = open("dd_toolbox_scene_import.log", "w")
+            sys.stdout = log_file
 
             for line in lines[1:]:
                 ls = line.split(',', 1)
@@ -1042,18 +1104,24 @@ def import_scene_from_clipboard():
                         parse_vrscene_file(ls[1], plugins, cameras, lights, settings, render_channels, nodes,
                                            environments, geometries, target_objects, black_listed_parms)
 
-                        load_render_channels(render_channels)
                         load_cameras(cameras, target_objects)
                         load_lights(lights, target_objects)
                         load_nodes(nodes, geometries, materials)
                         load_materials(plugins, materials)
                         load_environments(plugins, environments)
+                        load_render_channels(render_channels)
                         load_settings(settings)
 
-            print '\nScene import finished'
+            sys.stdout = old_stdout
+            log_file.close()
+
+            elapsed = timeit.default_timer() - start_time
+
+            print '\n...scene import finished in ' + format_elapsed_time(elapsed)
+            print '\nSee log file: ' + hou.expandString('$HIP') + '/dd_toolbox_scene_import.log'
 
         else:
-            print '\nNothing to import...'
+            print '\nNothing to import !'
 
 
 import_scene_from_clipboard()

@@ -622,14 +622,14 @@ fn writeVRScenefiles = (
     renderSceneDialog.commit()
 
     appendLineToFile ( _vrscenefile + ".vrscene" ) "#include \"%\"\n" (_vrscenefile + "_cameras.vrscene")
-    appendLineToFile ( _vrscenefile + ".vrscene" ) "#include \"%\"\n" (_vrscenefile + "_lights.vrscene")
+    --appendLineToFile ( _vrscenefile + ".vrscene" ) "#include \"%\"\n" (_vrscenefile + "_lights.vrscene") --already exists
     appendLineToFile ( _vrscenefile + ".vrscene" ) "#include \"%\"\n" (_vrscenefile + "_geometries.vrscene")
     appendLineToFile ( _vrscenefile + ".vrscene" ) "#include \"%\"\n" (_vrscenefile + "_settings.vrscene")
 
     writeToFile ( _vrscenefile + "_settings.vrscene" ) (exportCustomSettings())
     writeToFile ( _vrscenefile + "_geometries.vrscene" ) (exportGeometries())
     writeToFile ( _vrscenefile + "_cameras.vrscene" ) (exportCameras())
-    --writeToFile ( _vrscenefile + "_lights.vrscene" ) (exportLights()) --already exists
+    writeToFile ( _vrscenefile + "_lights.vrscene" ) (exportLights())
 
     print "scene successfully exported"
 )
