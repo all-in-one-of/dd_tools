@@ -12,9 +12,13 @@ except ImportError:
 
 global re, sys, timeit, set_timeline_range, parse_vrscene_file, import_scene_from_clipboard, get_vray_rop_node, try_parse_parm_value, normalize_name, try_create_node, try_set_parm, load_settings, load_cameras, load_lights, load_render_channels, get_render_channels_container, load_nodes, load_materials, try_set_input, get_material_output, add_plugin_node, revert_parms_to_default, load_environments, get_environment_settings, find_or_create_user_color, add_vray_objectid_param_template, add_scene_wirecolor_visualizer, try_find_or_create_node, try_find_or_create_target_object, init_constraint, format_value, format_elapsed_time
 
-metric_parms = (('SettingsCameraDof', 'aperture'), ('SettingsCameraDof', 'focal_dist'))  # parameters that need to be scaled
+metric_parms = (('SettingsCameraDof', 'aperture'), ('SettingsCameraDof', 'focal_dist'),
+                ('RenderChannelZDepth', 'depth_black'), ('Mtl2Sided', 'translucency_tex_mult'),
+                ('RenderChannelZDepth', 'depth_white'))  # parameters that need to be scaled
 
 black_listed_parms = (('BRDFVRayMtl', 'roughness_model'), ('BRDFVRayMtl', 'option_use_roughness'),
+                      ('LightRectangle', 'lightPortal'), ('LightRectangle', 'units'),
+                      ('LightRectangle', 'map_color'),
                       ('RenderChannelDRBucket', 'enableDeepOutput'), ('RenderChannelDenoiser', 'enableDeepOutput'),
                       ('RenderChannelColor', 'enableDeepOutput'), ('RenderChannelBumpNormals', 'enableDeepOutput'),
                       ('RenderChannelNormals', 'enableDeepOutput'), ('RenderChannelExtraTex', 'enableDeepOutput'),
@@ -63,8 +67,9 @@ black_listed_parms = (('BRDFVRayMtl', 'roughness_model'), ('BRDFVRayMtl', 'optio
                       ('SettingsVFB', 'glare_mask_objid'),
                       ('SettingsVFB', 'glare_mask_mtlid_on'), ('SettingsVFB', 'glare_mask_mtlid'),
                       ('SettingsVFB', 'interactive'),
-                      ('SettingsVFB', 'hardware_accelerated'), ('SettingsVFB',
-                                                                'display_srgb'))  # some black listed parameters, maybe not yet implemented or no need to be implemented...
+                      ('SettingsVFB', 'hardware_accelerated'), ('SettingsVFB', 'display_srgb'),
+                      ('TexDirt',
+                       'subdivs_as_samples'))  # some black listed parameters, maybe not yet implemented or no need to be implemented...
 
 
 def parse_vrscene_file(fname, plugins, cameras, lights, settings, renderChannels, nodes, environments, geometries,
@@ -87,7 +92,9 @@ def parse_vrscene_file(fname, plugins, cameras, lights, settings, renderChannels
     content = re.sub(re.compile('\#include\ \"(.*?)\"\n'), '', content)  # content without includes
     content = re.sub(re.compile('//.*?\n'), '', content)  # content without comments
 
-    # print content
+    print content + '\n\n\n'
+    print '//////////////////////////////////////////////////////////////////////////////' * 3
+    print '\n\n\n'
 
     matches = re.finditer(r'(.*?)\ (.*?)\ \{(.*?)\}', content, re.MULTILINE | re.DOTALL)
 
@@ -298,10 +305,18 @@ def load_settings(settings):
                 if parm_name == 'name':
                     hou.hipFile.setName(parm_val)
                 elif parm_name == 'camera':
-                    cam = hou.node('/obj/' + parm_val)
+                    cam = None
+                    if parm_val == '':
+                        cams = [child for child, child in enumerate(hou.node('/obj').children()) if child.type().name() == 'cam']
+                        if len(cams) > 0:
+                            cam = cams[0]
+                    else:
+                        cam = hou.node('/obj/' + parm_val)
+
                     if cam != None:
                         try_set_parm(vray_rop, 'render_camera', cam.path(), message_stack)
                         hou.ui.paneTabOfType(hou.paneTabType.SceneViewer).curViewport().setCamera(cam)
+
                 elif parm_name == 'fps':
                     hou.setFps(parm_val)
                 elif parm_name == 'range':
@@ -556,7 +571,7 @@ def try_find_or_create_node(parent, type, name, message_stack):
     return node
 
 
-def load_render_channels(renderChannels):
+def load_render_channels(plugins, renderChannels):
     # loading render channels
     message_stack = list()
 
@@ -573,7 +588,7 @@ def load_render_channels(renderChannels):
         if child.type().name() != 'VRayNodeRenderChannelsContainer':
             child.destroy()
 
-    render_channels_container = get_render_channels_container(render_channels_rop)
+    output_node = get_render_channels_container(render_channels_rop)
 
     print '\n\n\n#############################################'
     print '#########  LOADING RENDER CHANNELS  #########'
@@ -586,10 +601,10 @@ def load_render_channels(renderChannels):
 
         print name + ' ( ' + s['Type'] + ' ) \n'
 
-        render_channel = try_create_node(render_channels_rop, 'VRayNode' + s['Type'], name, message_stack)
+        node = try_create_node(render_channels_rop, 'VRayNode' + s['Type'], name, message_stack)
 
-        if render_channel != None:
-            render_channels_container.setNextInput(render_channel)
+        if node != None:
+            output_node.setNextInput(node)
 
             for p in s['Parms']:
                 parm_name = p['Name']
@@ -598,11 +613,18 @@ def load_render_channels(renderChannels):
                 if type == 'RenderChannelColor' and parm_name == 'alias':
                     parm_val -= 100  # item numbering from max starts at 100
 
-                if type == 'RenderChannelZDepth' and (parm_name == 'depth_black' or parm_name == 'depth_white'):
-                    parm_val *= 0.01  # metric values ! need convertion
+                if parm_name == 'texmap':
+                    for nn in plugins:
+                        if nn['Name'] == str(parm_val):
+                            add_plugin_node(plugins, render_channels_rop, node, parm_name, normalize_name(nn['Name']),
+                                            nn['Type'], nn['Parms'], message_stack)
 
-                print parm_name + " = " + str(parm_val)
-                try_set_parm(render_channel, parm_name, parm_val, message_stack)
+
+                else:
+
+                    print parm_name + " = " + str(parm_val)
+
+                    try_set_parm(node, parm_name, parm_val, message_stack)
 
         print '\n\n'
 
@@ -928,6 +950,57 @@ def add_plugin_node(plugins, parent, output_node, input_name, node_name, node_ty
                                 add_plugin_node(plugins, parent, node, 'weight_' + str(i + 1), nn['Name'], nn['Type'],
                                                 nn['Parms'], message_stack)
 
+
+
+            elif node_type == 'TexGradRamp' and parm_name == 'positions':
+
+                # positions=ListFloat(0, 1, 0.92, 0.95);
+
+                # init ramp with default values (
+                count = len(parm_val)
+                rampData = hou.Ramp([hou.rampBasis.Linear] * count, [x * 1. / (count - 1) for x in range(0, count)],
+                                    [(0.0, 0.0, 0.0)] * count)
+                try:
+                    node.setParms({'color_ramp': rampData})
+                except:
+                    message_stack.append('Cannot setting color_ramp...')
+                # ) end init ramp
+
+                for i in range(0, len(parm_val)):
+                    parm_name = 'color_ramp' + str(i + 1) + 'pos'
+                    pos = try_parse_parm_value(node_name, node_type, parm_name, parm_val[i], message_stack)
+                    try_set_parm(node, parm_name, pos, message_stack)
+
+
+            elif node_type == 'TexGradRamp' and parm_name == 'colors':
+                # colors = List(
+                #     Map__14 @ tex_10_0,
+                #     Map__14 @ tex_10_1,
+                #     Map__14 @ tex_10_2,
+                #     Map__14 @ tex_10_3
+                # );
+
+                for i in range(0, len(parm_val)):
+                    parm_name = 'color_ramp' + str(i + 1) + 'c'
+                    for nn in plugins:
+                        if nn['Name'] == parm_val[i]:
+                            c = try_parse_parm_value(nn['Name'], nn['Type'], nn['Parms'][0]['Name'],
+                                                     nn['Parms'][0]['Value'], message_stack)
+                            c = hou.Vector3((c.x(), c.y(), c.z()))  # Vector4 to Vector3
+                            try_set_parm(node, parm_name, c, message_stack)
+                            break
+
+            elif node_type == 'TexGradRamp' and parm_name == 'interpolation':
+                # interpolation = ListInt(
+                #     1, 1, 1, 1);
+
+                for i in range(0, len(parm_val)):
+                    parm_name = 'color_ramp' + str(i + 1) + 'interp'
+                    interp = try_parse_parm_value(node_name, node_type, parm_name, parm_val[i], message_stack)
+                    try_set_parm(node, parm_name, interp, message_stack)
+
+
+
             elif '@' in str(parm_val) or 'bitmapBuffer' in str(parm_val):
                 for nn in plugins:
                     if nn['Name'] == str(parm_val):
@@ -1115,7 +1188,7 @@ def import_scene_from_clipboard():
                         load_nodes(nodes, geometries, materials)
                         load_materials(plugins, materials)
                         load_environments(plugins, environments)
-                        load_render_channels(render_channels)
+                        load_render_channels(plugins, render_channels)
                         load_settings(settings)
 
             sys.stdout = old_stdout

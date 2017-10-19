@@ -433,17 +433,17 @@ fn exportLights _step:1 _substeps:1 = (
                     _str += "  u_size=" + ( _o.size0 / 100. ) as string + ";\n"
                     _str += "  v_size=" + ( _o.size1 / 100. ) as string + ";\n"
                     _str += "  directional=" + _o.lightDistribution as string + ";\n"
-                    _str += "  ignoreLightNormals=" + formatBoolean( _o.ignoreNormals as string ) + ";\n"
-                    _str += "  doubleSided=" + formatBoolean( _o.DoubleSided as string ) + ";\n"
+                    _str += "  ignoreLightNormals=" + formatBoolean( _o.ignoreNormals ) + ";\n"
+                    _str += "  doubleSided=" + formatBoolean( _o.doubleSided ) + ";\n"
                     _str += "  lightPortal=" + (get_lightPortal _o) as string + ";\n"
-                    _str += "  noDecay=" + formatBoolean( _o.noDecay as string ) + ";\n"
+                    _str += "  noDecay=" + formatBoolean( _o.noDecay ) + ";\n"
                 )
                 1 : (
                     --Dome
                     _str += "  tex_resolution=" + _o.texmap_resolution as string + ";\n"
                     _str += "  tex_adaptive=" + _o.texmap_adaptiveness as string + ";\n"
-                    _str += "  dome_spherical=" + formatBoolean( _o.dome_spherical as string ) + ";\n"
-                    _str += "  affect_alpha=" + formatBoolean( _o.dome_affect_alpha as string ) + ";\n"
+                    _str += "  dome_spherical=" + formatBoolean( _o.dome_spherical ) + ";\n"
+                    _str += "  affect_alpha=" + formatBoolean( _o.dome_affect_alpha ) + ";\n"
                     --texmap_locktodome pas d'equivalent sous houdini
                     _str += "  dome_rayDistanceMode=" + _o.dome_rayDistanceMode as string + ";\n"
                     _str += "  dome_rayDistance=" + _o.dome_rayDistance as string + ";\n"
@@ -453,16 +453,16 @@ fn exportLights _step:1 _substeps:1 = (
                 2 : (
                     --Sphere
                     _str += "  radius=" + ( _o.size0 / 100.) as string + ";\n"
-                    _str += "  noDecay=" + formatBoolean( _o.noDecay as string ) + ";\n"
+                    _str += "  noDecay=" + formatBoolean( _o.noDecay ) + ";\n"
                 )
                 3 : (
                     --Mesh
                     --flip normals a faire
                     --pick mesh a faire
-                    _str += "  ignoreLightNormals=" + formatBoolean( _o.ignoreNormals as string ) + ";\n"
-                    _str += "  doubleSided=" + formatBoolean( _o.DoubleSided as string ) + ";\n"
+                    _str += "  ignoreLightNormals=" + formatBoolean( _o.ignoreNormals ) + ";\n"
+                    _str += "  doubleSided=" + formatBoolean( _o.doubleSided ) + ";\n"
                     _str += "  lightPortal=" + (get_lightPortal _o) as string + ";\n"
-                    _str += "  noDecay=" + formatBoolean( _o.noDecay as string ) + ";\n"
+                    _str += "  noDecay=" + formatBoolean( _o.noDecay ) + ";\n"
                 )
                 4 : (
                     --Disc
@@ -471,29 +471,29 @@ fn exportLights _step:1 _substeps:1 = (
                     _str += "  v_size=" + (_o.size1 / 100.) as string + ";\n"
                     _str += "  directional=" + _o.lightDistribution as string + ";\n"
                     _str += "  ignoreLightNormals=" + _o.ignoreNormals as string + ";\n"
-                    _str += "  doubleSided=" + formatBoolean( _o.DoubleSided as string ) + ";\n"
+                    _str += "  doubleSided=" + formatBoolean( _o.doubleSided ) + ";\n"
                     _str += "  lightPortal=" + (get_lightPortal _o) as string + ";\n"
-                    _str += "  noDecay=" + formatBoolean( _o.noDecay as string ) + ";\n"
+                    _str += "  noDecay=" + formatBoolean( _o.noDecay ) + ";\n"
                 )
             )
 
             --common parameters
-            _str += "  enabled=" + formatBoolean( _o.on as string ) + ";\n"
+            _str += "  enabled=" + formatBoolean( _o.on ) + ";\n"
 
             _str += "  units=" + _o.normalizeColor as string + ";\n"
 
             _str += "  intensity=" + _o.multiplier as string + ";\n"
             _str += "  color=" + formatColor( _o.color ) + ";\n"
-            _str += "  map_color=" + formatBoolean( _o.texmap_on as string ) + ";\n"
+            _str += "  map_color=" + formatBoolean( _o.texmap_on ) + ";\n"
 
             --options parameters
             --exclude a faire
-            _str += "  shadows=" + formatBoolean( _o.castShadows as string ) + ";\n"
-            _str += "  invisible=" + formatBoolean( _o.invisible as string ) + ";\n"
-            _str += "  storeWithIrradianceMap=" + formatBoolean( _o.storeWithIrradMap as string ) + ";\n"
-            _str += "  affectDiffuse=" + formatBoolean( _o.affect_diffuse as string ) + ";\n"
-            _str += "  affectSpecular=" + formatBoolean( _o.affect_specular as string ) + ";\n"
-            _str += "  affectReflections=" + formatBoolean( _o.affect_reflections as string ) + ";\n"
+            _str += "  shadows=" + formatBoolean( _o.castShadows ) + ";\n"
+            _str += "  invisible=" + formatBoolean( _o.invisible ) + ";\n"
+            _str += "  storeWithIrradianceMap=" + formatBoolean( _o.storeWithIrradMap ) + ";\n"
+            _str += "  affectDiffuse=" + formatBoolean( _o.affect_diffuse ) + ";\n"
+            _str += "  affectSpecular=" + formatBoolean( _o.affect_specular ) + ";\n"
+            _str += "  affectReflections=" + formatBoolean( _o.affect_reflections ) + ";\n"
             _str += "  diffuse_contribution=" + _o.diffuse_contribution as string + ";\n"
             _str += "  specular_contribution=" + _o.specular_contribution as string + ";\n"
 
@@ -520,13 +520,13 @@ fn exportLights _step:1 _substeps:1 = (
 
         )else if classOf _o == VRaySun then
         (
-            _str += "  enabled=" + formatBoolean(_o.enabled as string) + ";\n"
-            _str += "  invisible=" + formatBoolean(_o.invisible as string) + ";\n"
-            _str += "  affectDiffuse=" + formatBoolean(_o.affect_diffuse as string) + ";\n"
+            _str += "  enabled=" + formatBoolean(_o.enabled) + ";\n"
+            _str += "  invisible=" + formatBoolean(_o.invisible) + ";\n"
+            _str += "  affectDiffuse=" + formatBoolean(_o.affect_diffuse) + ";\n"
             _str += "  diffuse_contribution=" + _o.diffuse_contribution as string + ";\n"
-            _str += "  affectSpecular=" + formatBoolean(_o.affect_specular as string) + ";\n"
+            _str += "  affectSpecular=" + formatBoolean(_o.affect_specular) + ";\n"
             _str += "  specular_contribution=" + _o.specular_contribution as string + ";\n"
-            _str += "  atmos_shadows=" + formatBoolean(_o.cast_atmospheric_shadows as string) + ";\n"
+            _str += "  atmos_shadows=" + formatBoolean(_o.cast_atmospheric_shadows) + ";\n"
             _str += "  turbidity=" + _o.turbidity as string + ";\n"
             _str += "  ozone=" + _o.ozone as string + ";\n"
             _str += "  intensity_multiplier=" + _o.intensity_multiplier as string + ";\n"
@@ -549,7 +549,7 @@ fn exportLights _step:1 _substeps:1 = (
 
         )else if classOf _o == VRayAmbientLight then
         (
-            _str += "  enabled=" + formatBoolean(_o.enabled as string) + ";\n"
+            _str += "  enabled=" + formatBoolean(_o.enabled) + ";\n"
             _str += "  intensity=" + _o.intensity as string + ";\n"
             _str += "  color=" + formatColor( _o.color ) + ";\n"
 
@@ -558,7 +558,7 @@ fn exportLights _step:1 _substeps:1 = (
             fn getlightshapemode _o = if _o.override_shape == true then return 1 else return 0
 
             -- je sais pas sis quelqu un utilise ce genre de lumiere....
-            _str += "  enabled=" + formatBoolean(_o.enabled as string) + ";\n"
+            _str += "  enabled=" + formatBoolean(_o.enabled) + ";\n"
             _str += "  power=" + _o.power as string + ";\n"
             --"rescale_max_intensty," -- pas trouvé d'equivalent sous max ?
             _str += "  ies_file,'" + _o.ies_file + "'\n"
@@ -574,9 +574,9 @@ fn exportLights _step:1 _substeps:1 = (
             --"use_global_light_level," -- pas trouvé d'equivalent sous max ?
             --"shadow_subdivs=" + _o.shadow_subdivs as string + ";\n" -- pas trouvé d'equivalent sous max ?
             _str += "  shadowBias=" + _o.shadow_bias as string + ";\n"
-            _str += "  affectDiffuse=" + formatBoolean(_o.affect_diffuse as string) + ";\n"
+            _str += "  affectDiffuse=" + formatBoolean(_o.affect_diffuse) + ";\n"
             _str += "  diffuse_contribution=" + _o.diffuse_contribution as string + ";\n"
-            _str += "  affectSpecular=" + formatBoolean(_o.affect_specular as string) + ";\n"
+            _str += "  affectSpecular=" + formatBoolean(_o.affect_specular) + ";\n"
             _str += "  specular_contribution=" + _o.specular_contribution as string + ";\n"
         )
 
