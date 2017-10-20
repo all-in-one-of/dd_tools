@@ -1,10 +1,4 @@
 import hou
-import re
-import os.path
-import shutil
-import sys
-import timeit
-import datetime
 
 try:
     from PyQt5 import QtWidgets, QtCore, QtGui
@@ -15,9 +9,11 @@ except ImportError:
 class import_scene_from_clipboard():
     metric_parms = (('SettingsCameraDof', 'aperture'), ('SettingsCameraDof', 'focal_dist'),
                     ('RenderChannelZDepth', 'depth_black'), ('Mtl2Sided', 'translucency_tex_mult'),
+                    ('TexFalloff', 'dist_near'), ('TexFalloff', 'dist_far'),
                     ('RenderChannelZDepth', 'depth_white'))  # parameters that need to be scaled
 
-    black_listed_parms = (('BRDFVRayMtl', 'roughness_model'), ('BRDFVRayMtl', 'option_use_roughness'),
+    black_listed_parms = (('TexFalloff', 'use_blend_input'),
+                          ('BRDFVRayMtl', 'roughness_model'), ('BRDFVRayMtl', 'option_use_roughness'),
                           ('LightRectangle', 'lightPortal'), ('LightRectangle', 'units'),
                           ('LightRectangle', 'map_color'),
                           ('RenderChannelDRBucket', 'enableDeepOutput'), ('RenderChannelDenoiser', 'enableDeepOutput'),
@@ -73,11 +69,21 @@ class import_scene_from_clipboard():
                           ('TexDirt',
                            'subdivs_as_samples'))  # some black listed parameters, maybe not yet implemented or no need to be implemented...
 
+    network_tab = \
+        [pane for pane in hou.ui.paneTabs() if
+         isinstance(pane, hou.NetworkEditor) and pane.isCurrentTab()][
+            -1]
+
     def parse_vrscene_file(self, fname, plugins, cameras, lights, settings, renderChannels, nodes, environments,
                            geometries,
                            targetObjects):
 
-        content = None
+        import re
+        import os
+
+        print '\n#############################################'
+        print '##########  LOADING .VRSCENE FILE  ##########'
+        print '#############################################'
 
         with open(fname, 'r') as content_file:
             content = content_file.read()
@@ -93,8 +99,11 @@ class import_scene_from_clipboard():
         content = re.sub(re.compile('\#include\ \"(.*?)\"\n'), '', content)  # content without includes
         content = re.sub(re.compile('//.*?\n'), '', content)  # content without comments
 
-        print content + '\n\n\n'
-        print '//////////////////////////////////////////////////////////////////////////////' * 3
+        print content
+
+        print '\n\n\n#############################################'
+        print '###############  FILE PARSING  ##############'
+        print '#############################################\n\n'
         print '\n\n\n'
 
         matches = re.finditer(r'(.*?)\ (.*?)\ \{(.*?)\}', content, re.MULTILINE | re.DOTALL)
@@ -169,6 +178,7 @@ class import_scene_from_clipboard():
         return vray_rop
 
     def try_parse_parm_value(self, name, type, parm_name, parm_val, message_stack):
+        import re
 
         result = parm_val
 
@@ -567,19 +577,19 @@ class import_scene_from_clipboard():
         message_stack = list()
 
         vray_rop = self.get_vray_rop_node()
-        render_channels_rop = hou.node(vray_rop.parm('render_network_render_channels').eval())
+        render_elements = hou.node(vray_rop.parm('render_network_render_channels').eval())
 
-        if render_channels_rop == None:
+        if render_elements == None:
             out = hou.node('/out')
-            render_channels_rop = out.createNode('vray_render_channels', 'render_elements')
-            render_channels_rop.moveToGoodPosition()
-            vray_rop.parm('render_network_render_channels').set(render_channels_rop.path())
+            render_elements = out.createNode('vray_render_channels', 'render_elements')
+            render_elements.moveToGoodPosition()
+            vray_rop.parm('render_network_render_channels').set(render_elements.path())
 
-        for child in render_channels_rop.children():
+        for child in render_elements.children():
             if child.type().name() != 'VRayNodeRenderChannelsContainer':
                 child.destroy()
 
-        output_node = self.get_render_channels_container(render_channels_rop)
+        output_node = self.get_render_channels_container(render_elements)
 
         print '\n\n\n#############################################'
         print '#########  LOADING RENDER CHANNELS  #########'
@@ -592,7 +602,7 @@ class import_scene_from_clipboard():
 
             print name + ' ( ' + s['Type'] + ' ) \n'
 
-            node = self.try_create_node(render_channels_rop, 'VRayNode' + s['Type'], name, message_stack)
+            node = self.try_create_node(render_elements, 'VRayNode' + s['Type'], name, message_stack)
 
             if node != None:
                 output_node.setNextInput(node)
@@ -607,7 +617,7 @@ class import_scene_from_clipboard():
                     if parm_name == 'texmap':
                         for nn in plugins:
                             if nn['Name'] == str(parm_val):
-                                self.add_plugin_node(plugins, render_channels_rop, node, parm_name,
+                                self.add_plugin_node(plugins, render_elements, node, parm_name,
                                                      self.normalize_name(nn['Name']),
                                                      nn['Type'], nn['Parms'], message_stack)
 
@@ -618,9 +628,9 @@ class import_scene_from_clipboard():
 
                         self.try_set_parm(node, parm_name, parm_val, message_stack)
 
-            print '\n\n'
+                print '\n\n'
 
-        render_channels_rop.layoutChildren()
+        self.zoom_extents_children(render_elements)
 
         if len(message_stack) != 0:
             print '\n\n\nLoad Render Channels terminated with: ' + str(len(message_stack)) + ' errors:\n'
@@ -651,6 +661,9 @@ class import_scene_from_clipboard():
             wirecolor_vis.setIsActive(True, viewport=geoviewport)
 
     def load_nodes(self, nodes, geometries, materials):
+        import os
+        import shutil
+
         # loading nodes
         message_stack = list()
         obj = hou.node('/obj')
@@ -781,12 +794,12 @@ class import_scene_from_clipboard():
             if not parms[i - 1].name() in exclude_parm_list:
                 parms[i - 1].revertToDefaults()
 
-    def try_set_input(self, output_node, input_name, node, message_stack):
+    def try_set_input(self, output_node, input_name, node, message_stack, output_index=0):
         input_index = output_node.inputIndex(input_name)
 
         if input_index != -1:
             try:
-                output_node.setInput(input_index, node)
+                output_node.setInput(input_index, node, output_index)
             except:
                 message_stack.append('cannot set input: ' + str(
                     input_name) + ' from node: ' + output_node.name() + ' to node: ' + node.name())
@@ -882,8 +895,11 @@ class import_scene_from_clipboard():
 
                         self.try_set_input(node, 'uvw_matrix', matrix, message_stack)
 
-                        matrix.setSelected(True)  # Temp !!!!!
-
+                        matrix.setSelected(True)
+                        # matrix.cook(force=True)
+                        # matrix.updateParmStates()
+                        # matrix.runInitScripts()
+                        matrix.setSelected(False)
 
                 elif node_type == 'MtlMulti':
 
@@ -894,21 +910,34 @@ class import_scene_from_clipboard():
                         if mtlid_gen == None:
                             mtlid_gen = node.insertParmGenerator('mtlid_gen', hou.vopParmGenType.Parameter, False)
                             mtlid_gen.setName(output_node.name() + '_mtlid_gen')'''
-                        mtlid_gen = self.try_find_or_create_node(parent, 'parameter', output_node.name() + '_mtlid_gen',
-                                                                 message_stack)
 
-                        if mtlid_gen != None:
-                            self.try_set_parm(mtlid_gen, 'parmname', 'mtlid_gen', message_stack)
+                        '''mtlid_gen = self.try_find_or_create_node(parent, 'parameter', output_node.name() + '_mtlid_gen',
+                                                                 message_stack)'''
+
+                        material_id = self.try_find_or_create_node(parent, 'VRayNodeTexSampler',
+                                                                   output_node.name() + '_mtlid_gen',
+                                                                   message_stack)
+
+                        # if mtlid_gen != None:
+                        if material_id != None:
+                            '''self.try_set_parm(mtlid_gen, 'parmname', 'mtlid_gen', message_stack)
                             self.try_set_parm(mtlid_gen, 'parmtype', 1, message_stack)
                             self.try_set_parm(mtlid_gen, 'intdef', 0, message_stack)
                             self.try_set_parm(mtlid_gen, 'invisible', 1, message_stack)
                             self.try_set_parm(mtlid_gen, 'exportparm', 1, message_stack)
 
-                            self.try_set_input(node, 'mtlid_gen', mtlid_gen, message_stack)
-
-                            mtlid_gen.setSelected(True)  # Temp !!!!!
+                            self.try_set_input(node, 'mtlid_gen', mtlid_gen, message_stack)'''
 
                             self.try_set_parm(node, 'mtl_count', len(parm_val), message_stack)
+
+                            self.try_set_input(node, 'mtlid_gen_float', material_id, message_stack, output_index=18)
+                            material_id.setGenericFlag(hou.nodeFlag.InOutDetailLow, True)
+
+                            '''mtlid_gen.setSelected(True)
+                            mtlid_gen.cook(force=True)
+                            mtlid_gen.updateParmStates()
+                            mtlid_gen.runInitScripts()
+                            mtlid_gen.setSelected(False)'''
 
                         for i in range(0, len(parm_val)):
                             for nn in plugins:
@@ -1035,9 +1064,11 @@ class import_scene_from_clipboard():
                                              n['Parms'],
                                              message_stack)
 
-                        material.layoutChildren()
+                        self.zoom_extents_children(material)
 
                         break
+
+        self.zoom_extents_children(shop)
 
         if len(message_stack) != 0:
             print '\n\n\nLoad Scene materials terminated with: ' + str(len(message_stack)) + ' errors:\n'
@@ -1084,19 +1115,19 @@ class import_scene_from_clipboard():
         message_stack = list()
 
         vray_rop = self.get_vray_rop_node()
-        parent = hou.node(vray_rop.parm('render_network_environment').eval())
+        env = hou.node(vray_rop.parm('render_network_environment').eval())
 
-        if parent == None:
+        if env == None:
             out = hou.node('/out')
-            parent = out.createNode('vray_environment', 'env')
-            parent.moveToGoodPosition()
-            vray_rop.parm('render_network_environment').set(parent.path())
+            env = out.createNode('vray_environment', 'env')
+            env.moveToGoodPosition()
+            vray_rop.parm('render_network_environment').set(env.path())
 
-        for child in parent.children():
+        for child in env.children():
             if child.type().name() != 'VRayNodeSettingsEnvironment':
                 child.destroy()
 
-        output_node = self.get_environment_settings(parent)
+        output_node = self.get_environment_settings(env)
 
         print '\n\n\n#############################################'
         print '########  LOADING SCENE ENVIRONMENT  ########'
@@ -1110,16 +1141,16 @@ class import_scene_from_clipboard():
             print parm_name + " = " + str(parm_val)
 
             if isinstance(parm_val, hou.Vector4):
-                self.find_or_create_user_color(output_node, parent, parm_name, parm_val, message_stack)
+                self.find_or_create_user_color(output_node, env, parm_name, parm_val, message_stack)
 
             for nn in plugins:
                 if nn['Name'] == str(parm_val):
-                    self.add_plugin_node(plugins, parent, output_node, parm_name, nn['Name'], nn['Type'], nn['Parms'],
+                    self.add_plugin_node(plugins, env, output_node, parm_name, nn['Name'], nn['Type'], nn['Parms'],
                                          message_stack)
 
-        print '\n\n'
+            print '\n\n'
 
-        parent.layoutChildren()
+        self.zoom_extents_children(env)
 
         if len(message_stack) != 0:
             print '\n\n\nLoad Scene environment terminated with: ' + str(len(message_stack)) + ' errors:\n'
@@ -1139,7 +1170,21 @@ class import_scene_from_clipboard():
         else:
             return str(float("{0:.2f}".format(elapsed))) + ' seconds'
 
+    def zoom_extents_children(self, node):
+        node.layoutChildren()
+        self.network_tab.cd(node.path())
+        for child in node.children():
+            child.setSelected(True)
+        self.network_tab.homeToSelection()
+        for child in node.children():
+            child.setSelected(False)
+
     def run(self):
+        import timeit
+        import datetime
+        import sys
+        import hou
+
         clipboard = QtWidgets.QApplication.clipboard()
         text = clipboard.text()
         lines = text.splitlines()
@@ -1154,9 +1199,6 @@ class import_scene_from_clipboard():
         environments = list()
         geometries = list()
         target_objects = list()
-
-        # clear console
-        # print '\n' * 5000
 
         if lines.count > 1:
             if lines[0] == '#scene_export':
@@ -1176,7 +1218,7 @@ class import_scene_from_clipboard():
 
                 now = datetime.datetime.now()
                 str_now = str(now.year) + '_' + str(now.month) + '_' + str(now.day) + '_' + str(now.hour) + '_' + str(
-                    now.minute)  # + '_' + str(now.second)
+                    now.minute)
 
                 log_filename = hip_dir + 'scene_import_' + str_now + '.log'
                 log_file = open(log_filename, 'w')
@@ -1200,16 +1242,17 @@ class import_scene_from_clipboard():
                                 self.load_environments(plugins, environments)
                                 self.load_render_channels(plugins, render_channels)
                                 self.load_settings(settings)
+
+                    obj = hou.node('/obj')
+                    self.zoom_extents_children(obj)
+
+                    print '\n\n\n#############################################'
+                    print '###################  END  ###################'
+                    print '#############################################'
+
                 except:
                     sys.stdout = old_stdout
                     log_file.close()
-
-                network_tab = \
-                    [pane for pane in hou.ui.paneTabs() if isinstance(pane, hou.NetworkEditor) and pane.isCurrentTab()][
-                        -1]
-                network_tab.cd('/obj')
-                for child in hou.node('/obj').children():
-                    child.setSelected(False)
 
                 sys.stdout = old_stdout
                 log_file.close()
