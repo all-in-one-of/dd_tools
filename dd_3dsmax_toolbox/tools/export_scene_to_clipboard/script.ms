@@ -430,8 +430,8 @@ fn exportLights _step:1 _substeps:1 = (
                 0 : (
                     --Plane
                     _str += "  is_disc=False;\n"
-                    _str += "  u_size=" + ( _o.size0 / 100. ) as string + ";\n"
-                    _str += "  v_size=" + ( _o.size1 / 100. ) as string + ";\n"
+                    _str += "  u_size=" + ( _o.size0 * 2 / 100. ) as string + ";\n"
+                    _str += "  v_size=" + ( _o.size1 * 2 / 100. ) as string + ";\n"
                     _str += "  directional=" + _o.lightDistribution as string + ";\n"
                     _str += "  ignoreLightNormals=" + formatBoolean( _o.ignoreNormals ) + ";\n"
                     _str += "  doubleSided=" + formatBoolean( _o.doubleSided ) + ";\n"
@@ -595,8 +595,9 @@ fn exportCustomSettings = (
     _cam = if getActiveCamera() != undefined then normalizeName( (getActiveCamera()).name ) else ""
     _fps = (framerate as float) as string
     _range = [animationrange.start.frame as integer , animationrange.end.frame as integer] as string
+    _frame = (currenttime.frame as float) as string
 
-    _str = "CustomSettings scene_settings {\n  name=\"" + _name + "\";\n  camera=\"" + _cam + "\";\n  fps=" + _fps + ";\n  range=" + _range + ";\n}\n"
+    _str = "CustomSettings scene_settings {\n  name=\"" + _name + "\";\n  camera=\"" + _cam + "\";\n  fps=" + _fps + ";\n  range=" + _range + ";\n  frame=" + _frame + ";\n}\n"
 
     _aa_filter = if renderers.current.filter_on == false then 0 else filter_kernel_convert renderers.current.filter_kernel as string
 
