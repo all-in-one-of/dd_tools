@@ -45,12 +45,12 @@ fn clearListnerFromPos _from = (
 )
 
 
-fn exportGeometries _step:1 _substeps:1 = (
+fn exportGeometries _dir _step:1 _substeps:1 = (
     _str = ""
-    for _o in geometry do (
+    for _o in geometry where _o.isHidden == false and _o.renderable == true do (
         _animated = ( _o.isAnimated or isDeformable _o )
         _name = substituteString ( substituteString _o.name " " "_" ) "." "_"
-        _abcfile = sysinfo.tempdir + _name + ".abc"
+        _abcfile = _dir + _name + ".abc"
         _frange = [0,100]
         _opath = getHierarchy _o
         if _animated == false then _frange = [currenttime.frame, currenttime.frame] else _frange = [animationrange.start.frame, animationrange.end.frame]
@@ -140,8 +140,8 @@ fn maxToHoudiniGetTransforms _o _prerotate:false _step:1 _substeps:1 = (
 
 
 fn normalizeName _name = (
-
-    ( substituteString ( substituteString ( substituteString _name " " "_" ) "." "_" ) ":" "_" )
+    re = dotnetObject "System.Text.RegularExpressions.Regex" "[^a-zA-Z0-9@]"
+    re.Replace _name "_"
 )
 
 
@@ -599,9 +599,10 @@ fn exportCustomSettings = (
 
     _str = "CustomSettings scene_settings {\n  name=\"" + _name + "\";\n  camera=\"" + _cam + "\";\n  fps=" + _fps + ";\n  range=" + _range + ";\n  frame=" + _frame + ";\n}\n"
 
-    _aa_filter = if renderers.current.filter_on == false then 0 else filter_kernel_convert renderers.current.filter_kernel as string
-
-    _str += "\nSettingsImageSampler aa_filter {\n  filter_type=" + _aa_filter + ";\n}\n"
+    try(
+        _aa_filter = if renderers.current.filter_on == false then 0 else filter_kernel_convert renderers.current.filter_kernel as string
+        _str += "\nSettingsImageSampler aa_filter {\n  filter_type=" + _aa_filter + ";\n}\n"
+    )catch()
 
     _str
 )
@@ -609,28 +610,32 @@ fn exportCustomSettings = (
 
 fn writeVRScenefiles = (
 
-    _vrscenefile = sysinfo.tempdir + getFilenameFile maxfilename
+    _dir = sysinfo.tempdir + "houdini_export_temp\\"
+
+    makeDir _dir
+
+    _filename = _dir + getFilenameFile maxfilename
 
     _script = "#scene_export\n\n"
 
-    vrayExportRTScene ( _vrscenefile + ".vrscene" ) exportCompressed:false exportHEXFormatMesh:false exportHEXFormatTransf:false separateFiles:true exportView:false exportLights:false exportGeometry:false exportNodes:true exportMaterials:true exportTextures:true exportBitmaps:true prefix:"" stripPaths:false
+    vrayExportRTScene ( _filename + ".vrscene" ) exportCompressed:false exportHEXFormatMesh:false exportHEXFormatTransf:false separateFiles:true exportView:false exportLights:false exportGeometry:false exportNodes:true exportMaterials:true exportTextures:true exportBitmaps:true prefix:"" stripPaths:false
 
-    _script += "filename," + _vrscenefile + ".vrscene" + "\n"
+    _script += "filename," + _filename + ".vrscene" + "\n"
 
 
     setclipboardText _script
 
     renderSceneDialog.commit()
 
-    appendLineToFile ( _vrscenefile + ".vrscene" ) "#include \"%\"\n" (_vrscenefile + "_cameras.vrscene")
-    --appendLineToFile ( _vrscenefile + ".vrscene" ) "#include \"%\"\n" (_vrscenefile + "_lights.vrscene") --already exists
-    appendLineToFile ( _vrscenefile + ".vrscene" ) "#include \"%\"\n" (_vrscenefile + "_geometries.vrscene")
-    appendLineToFile ( _vrscenefile + ".vrscene" ) "#include \"%\"\n" (_vrscenefile + "_settings.vrscene")
+    appendLineToFile ( _filename + ".vrscene" ) "#include \"%\"\n" (_filename + "_cameras.vrscene")
+    --appendLineToFile ( _filename + ".vrscene" ) "#include \"%\"\n" (_filename + "_lights.vrscene") --already exists
+    appendLineToFile ( _filename + ".vrscene" ) "#include \"%\"\n" (_filename + "_geometries.vrscene")
+    appendLineToFile ( _filename + ".vrscene" ) "#include \"%\"\n" (_filename + "_settings.vrscene")
 
-    writeToFile ( _vrscenefile + "_settings.vrscene" ) (exportCustomSettings())
-    writeToFile ( _vrscenefile + "_geometries.vrscene" ) (exportGeometries())
-    writeToFile ( _vrscenefile + "_cameras.vrscene" ) (exportCameras())
-    writeToFile ( _vrscenefile + "_lights.vrscene" ) (exportLights())
+    writeToFile ( _filename + "_settings.vrscene" ) (exportCustomSettings())
+    writeToFile ( _filename + "_geometries.vrscene" ) (exportGeometries _dir)
+    writeToFile ( _filename + "_cameras.vrscene" ) (exportCameras())
+    writeToFile ( _filename + "_lights.vrscene" ) (exportLights())
 
     print "scene successfully exported"
 )

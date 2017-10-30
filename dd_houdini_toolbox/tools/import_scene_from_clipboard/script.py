@@ -794,7 +794,13 @@ class import_scene_from_clipboard():
             if not parms[i - 1].name() in exclude_parm_list:
                 parms[i - 1].revertToDefaults()
 
-    def try_set_input(self, output_node, input_name, node, message_stack, output_index=0):
+    def try_set_input(self, output_node, input_name, node, message_stack, output_name=''):
+        output_index = 0
+        if output_name != '':
+            result = node.outputIndex(output_name)
+            if result != -1:
+                output_index = result
+
         input_index = output_node.inputIndex(input_name)
 
         if input_index != -1:
@@ -807,7 +813,7 @@ class import_scene_from_clipboard():
             message_stack.append('cannot find input: ' + str(input_name) + ' on node: ' + output_node.name())
 
     def add_plugin_node(self, plugins, parent, output_node, input_name, node_name, node_type, node_parms,
-                        message_stack):
+                        message_stack, output_name=''):
         node = self.try_find_or_create_node(parent, 'VRayNode' + node_type, self.normalize_name(node_name),
                                             message_stack)
 
@@ -815,7 +821,7 @@ class import_scene_from_clipboard():
 
         if node != None:
 
-            self.try_set_input(output_node, input_name, node, message_stack)
+            self.try_set_input(output_node, input_name, node, message_stack, output_name)
 
             for p in node_parms:
                 parm_name = p['Name']
@@ -845,7 +851,7 @@ class import_scene_from_clipboard():
                             'unknown mapping_type value: "' + str(parm_val) + '" on node: ' + node.name())
                         parm_val = 2
 
-                        # if (node_type == 'UVWGenChannel' or node_type == 'UVWGenEnvironment') and parm_name == 'uvw_transform':
+
                 if parm_name == 'uvw_transform':
 
                     makexform = self.try_find_or_create_node(parent, 'makexform', node.name() + '_transform',
@@ -855,10 +861,9 @@ class import_scene_from_clipboard():
 
                         try:
                             result = hou.Matrix4(parm_val[0]).explode(transform_order='trs', rotate_order='xyz',
-                                                                      pivot=hou.Vector3(0.5, 0.5,
-                                                                                        0))  # , pivot=parm_val[1])
+                                                                      pivot=hou.Vector3(0.5, 0.5, 0))  # TEST
 
-                            # try_set_parm(xform, 'trans', result['translate'], message_stack)
+
                             self.try_set_parm(makexform, 'trans', parm_val[1], message_stack)
                             self.try_set_parm(makexform, 'rot', result['rotate'], message_stack)
                             self.try_set_parm(makexform, 'scale', result['scale'], message_stack)
@@ -869,7 +874,6 @@ class import_scene_from_clipboard():
                         self.try_set_input(node, 'uvw_transform', makexform, message_stack)
 
 
-                # if (node_type == 'UVWGenChannel' or node_type == 'UVWGenEnvironment') and parm_name == 'uvw_matrix':
                 elif parm_name == 'uvw_matrix':
 
                     matrix = self.try_find_or_create_node(parent, 'parameter', node.name() + '_matrix', message_stack)
@@ -1029,9 +1033,14 @@ class import_scene_from_clipboard():
 
                 elif '@' in str(parm_val) or 'bitmapBuffer' in str(parm_val):
                     for nn in plugins:
-                        if nn['Name'] == str(parm_val):
+                        name = str(parm_val)
+                        if '::' in name:
+                            split = name.split('::')
+                            name = split[0]
+                            output_name = split[1]
+                        if nn['Name'] == name:
                             self.add_plugin_node(plugins, parent, node, parm_name, nn['Name'], nn['Type'], nn['Parms'],
-                                                 message_stack)
+                                                 message_stack, output_name=output_name)
 
                 else:
 
