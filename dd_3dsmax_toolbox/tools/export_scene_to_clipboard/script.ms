@@ -45,9 +45,31 @@ fn clearListnerFromPos _from = (
 )
 
 
+fn getValidGeometries = (
+    _result = for _o in geometry where _o.isHidden == false and _o.renderable == true collect _o
+	_result = for i = _result.count to 1 by -1 collect _result[i] --reverse array
+    for _o in _result do (
+        _instances = #()
+        _count = InstanceMgr.GetInstances _o &_instances
+		_instances = for i = _instances.count to 1 by -1 collect _instances[i] --reverse array
+        while _count > 1 do (
+            for i = _result.count to 1 by -1 do (
+                if _result[i] == _instances[_count] do (
+                    deleteItem _result i
+                    _count -= 1
+                )
+            )
+        )
+    )
+    _result
+)
+
+
+
 fn exportGeometries _dir _step:1 _substeps:1 = (
     _str = ""
-    for _o in geometry where _o.isHidden == false and _o.renderable == true do (
+    _validGeometries = getValidGeometries()
+    for _o in _validGeometries do (
         _animated = ( _o.isAnimated or isDeformable _o )
         _name = substituteString ( substituteString _o.name " " "_" ) "." "_"
         _abcfile = _dir + _name + ".abc"
@@ -76,14 +98,11 @@ fn exportGeometries _dir _step:1 _substeps:1 = (
             _job += ";mergePolyMeshSubtree=true"
             _job += ";particlesystemtomeshconversion=true"
             --_job += ";dynamictopology=true"
-            _job += ";transformCache=true"
+            --_job += ";transformCache=true"
+            _job += ";transformCache=false" --TEST
             _job += ";storageFormat=hdf5"
 
-            --_from = getListenerCurrentPos()
-
             _result = ExocortexAlembic.createExportJobs( _job )
-
-            --clearListnerFromPos _from
 
             if( _result != 0 ) do (
                 messageBox "Failure - See Maxscript Listener for details." title:"Exocortex Alembic Export"
@@ -99,12 +118,16 @@ fn exportGeometries _dir _step:1 _substeps:1 = (
 
         if _abcfile != undefined do
         (
-            _str += "AlembicGeometry " + _name + " {\n"
+            if classOf _o != HairObject and classOf _o != GuidesObject then (
+                _str += "AlembicGeometry " + _name + " {\n"
+            else
+                _str += "OxAlembicExport " + _name + " {\n"
+
             _str += "  filename=\"" + _abcfile + "\";\n"
             _str += "  object_id=" + _o.gbufferChannel  as string + ";\n"
             _str += "  wirecolor=Color(" + ( _o.wirecolor.r / 255. ) as string + "," + ( _o.wirecolor.g/ 255. ) as string + "," + ( _o.wirecolor.b / 255. ) as string + ");\n"
             _str += "  handle=" + _o.inode.handle as string + ";\n"
-            --here add user properties...
+            --user properties
             for _line in (FilterString (getUserPropBuffer _o) "\n") do
             (
                 _prop_str = substituteString (trimLeft (trimRight _line)) " = " "="
