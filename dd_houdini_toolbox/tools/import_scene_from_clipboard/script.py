@@ -851,7 +851,6 @@ class import_scene_from_clipboard():
                             'unknown mapping_type value: "' + str(parm_val) + '" on node: ' + node.name())
                         parm_val = 2
 
-
                 if parm_name == 'uvw_transform':
 
                     makexform = self.try_find_or_create_node(parent, 'makexform', node.name() + '_transform',
@@ -862,7 +861,6 @@ class import_scene_from_clipboard():
                         try:
                             result = hou.Matrix4(parm_val[0]).explode(transform_order='trs', rotate_order='xyz',
                                                                       pivot=hou.Vector3(0.5, 0.5, 0))  # TEST
-
 
                             self.try_set_parm(makexform, 'trans', parm_val[1], message_stack)
                             self.try_set_parm(makexform, 'rot', result['rotate'], message_stack)

@@ -65,7 +65,6 @@ fn getValidGeometries = (
 )
 
 
-
 fn exportGeometries _dir _step:1 _substeps:1 = (
     _str = ""
     _validGeometries = getValidGeometries()
