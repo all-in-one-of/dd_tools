@@ -663,6 +663,7 @@ class import_scene_from_clipboard():
     def load_nodes(self, nodes, geometries, materials):
         import os
         import shutil
+        from os.path import basename
 
         # loading nodes
         message_stack = list()
@@ -716,10 +717,14 @@ class import_scene_from_clipboard():
                         wirecolor = self.try_parse_parm_value(name, n['Type'], parm_name, parm_val, message_stack)
                     elif parm_name == 'handle':
                         handle = self.try_parse_parm_value(name, n['Type'], parm_name, parm_val, message_stack)
+                    else:
+                        # transform values
+                        parm_val = self.try_parse_parm_value(name, n['Type'], parm_name, parm_val, message_stack)
+                        self.try_set_parm(geo, parm_name, parm_val, message_stack)
 
                 # copy cache file from temp location to .hip/geo dir
                 if os.path.isfile(from_filename):
-                    to_filename = geo_dir + name + ".abc"
+                    to_filename = geo_dir + basename(from_filename) + ".abc"
                     try:
                         # shutil.move(from_filename, to_filename)
                         shutil.copy(from_filename, to_filename)
@@ -736,7 +741,7 @@ class import_scene_from_clipboard():
                 alembic = geo.node('alembic1')
                 if alembic == None:
                     alembic = geo.createNode('alembic')
-                alembic.parm('fileName').set('$HIP/geo/' + name + ".abc")
+                alembic.parm('fileName').set('$HIP/geo/' + basename(from_filename) + ".abc")
                 alembic.parm('reload').pressButton()
 
                 xform = geo.node('xform1')

@@ -45,104 +45,6 @@ fn clearListnerFromPos _from = (
 )
 
 
-fn getValidGeometries = (
-    _result = for _o in geometry where _o.isHidden == false and _o.renderable == true collect _o
-	_result = for i = _result.count to 1 by -1 collect _result[i] --reverse array
-    for _o in _result do (
-        _instances = #()
-        _count = InstanceMgr.GetInstances _o &_instances
-		_instances = for i = _instances.count to 1 by -1 collect _instances[i] --reverse array
-        while _count > 1 do (
-            for i = _result.count to 1 by -1 do (
-                if _result[i] == _instances[_count] do (
-                    deleteItem _result i
-                    _count -= 1
-                )
-            )
-        )
-    )
-    _result
-)
-
-
-fn exportGeometries _dir _step:1 _substeps:1 = (
-    _str = ""
-    _validGeometries = getValidGeometries()
-    for _o in _validGeometries do (
-        _animated = ( _o.isAnimated or isDeformable _o )
-        _name = substituteString ( substituteString _o.name " " "_" ) "." "_"
-        _abcfile = _dir + _name + ".abc"
-        _frange = [0,100]
-        _opath = getHierarchy _o
-        if _animated == false then _frange = [currenttime.frame, currenttime.frame] else _frange = [animationrange.start.frame, animationrange.end.frame]
-
-        if classOf _o != HairObject and classOf _o != GuidesObject then (
-            _job = "filename=" + _abcfile
-            _job += ";in=" + (_frange[1] as string)
-            _job += ";out=" + (_frange[2] as string)
-            _job += ";step=" + (_step as string)
-            _job += ";substep=" + (_substeps as string)
-            _job += ";purepointcache=false"
-            _job += ";normals=true"
-            _job += ";uvs=true"
-            _job += ";materialids=true"
-            _job += ";exportselected=false"
-            _job += ";objects=" + getHierarchy _o
-            _job += ";flattenhierarchy=true"
-            _job += ";automaticinstancing=true"
-            _job += ";facesets=partitioningFacesetsOnly"
-            _job += ";transformCache=false"
-            _job += ";validateMeshTopology=false"
-            _job += ";renameConflictingNodes=false"
-            _job += ";mergePolyMeshSubtree=true"
-            _job += ";particlesystemtomeshconversion=true"
-            --_job += ";dynamictopology=true"
-            --_job += ";transformCache=true"
-            _job += ";transformCache=false" --TEST
-            _job += ";storageFormat=hdf5"
-
-            _result = ExocortexAlembic.createExportJobs( _job )
-
-            if( _result != 0 ) do (
-                messageBox "Failure - See Maxscript Listener for details." title:"Exocortex Alembic Export"
-                _abcfile = undefined
-            )
-        )else (
-            --https://ephere.com/plugins/autodesk/max/ornatrix/docs/4/Alembic_Export.html#Examples
-            --OxAlembicExport [string filePath] [bool exportSelectedHairs] [int startFrame] [int endFrame] [bool exportRenderVersion] [int upDirection] [int format]
-            try(
-                _result = OxAlembicExport _abcfile true _frange[1] _frange[2]-- false 1 0
-            )catch(_abcfile = undefined)
-        )
-
-        if _abcfile != undefined do
-        (
-            if classOf _o != HairObject and classOf _o != GuidesObject then (
-                _str += "AlembicGeometry " + _name + " {\n"
-            else
-                _str += "OxAlembicExport " + _name + " {\n"
-
-            _str += "  filename=\"" + _abcfile + "\";\n"
-            _str += "  object_id=" + _o.gbufferChannel  as string + ";\n"
-            _str += "  wirecolor=Color(" + ( _o.wirecolor.r / 255. ) as string + "," + ( _o.wirecolor.g/ 255. ) as string + "," + ( _o.wirecolor.b / 255. ) as string + ");\n"
-            _str += "  handle=" + _o.inode.handle as string + ";\n"
-            --user properties
-            for _line in (FilterString (getUserPropBuffer _o) "\n") do
-            (
-                _prop_str = substituteString (trimLeft (trimRight _line)) " = " "="
-                _prop_split = FilterString _prop_str "="
-                _prop_name = substituteString (toLower _prop_split[1]) "vray_" ""
-                _prop_val = substituteString (substituteString _prop_split[2] "[" "Color(") "]" ")"
-	            _str += "  " + _prop_name + "=" + _prop_val + ";\n"
-	        )
-            _str += "}\n\n"
-        )
-    )
-    clearListener()
-	_str
-)
-
-
 fn maxToHoudiniTransform _t _prerotate = (
     if _prerotate == false then
         ( matrix3 [1,0,0] [0,0,1] [0,-1,0] [0,0,0] ) * _t * inverse( matrix3 [1,0,0] [0,0,1] [0,-1,0] [0,0,0] )
@@ -222,6 +124,168 @@ fn formatTuple _tuple = (
         _result = floatToString _tuple[1][2]
     )
     _result
+)
+
+
+fn formatBoolean _bool = (
+
+    if _bool == false or _bool == 0 then return "False" else return "True"
+)
+
+
+fn formatColor _color = (
+
+    "Color(" + floatToString( _color.r / 255. ) + "," + floatToString( _color.g / 255. ) + "," + floatToString( _color.b / 255. ) + ")"
+)
+
+
+fn formatAColor _acolor = (
+
+    "AColor(" + floatToString( _acolor.r / 255. ) + "," + floatToString( _acolor.g / 255. ) + "," + floatToString( _acolor.b / 255. ) + "," + floatToString( _acolor.a / 255. ) + ")"
+)
+
+
+fn getValidGeometries = (
+    _result = for _o in geometry where _o.isHidden == false and _o.renderable == true collect _o
+	_result = for i = _result.count to 1 by -1 collect _result[i] --reverse array
+    for _o in _result do (
+        _instances = #()
+        _count = InstanceMgr.GetInstances _o &_instances
+		_instances = for i = _instances.count to 1 by -1 collect _instances[i] --reverse array
+        while _count > 1 do (
+            for i = _result.count to 1 by -1 do (
+                if _result[i] == _instances[_count] do (
+                    deleteItem _result i
+                    _count -= 1
+                )
+            )
+        )
+    )
+    _result
+)
+
+
+fn exportGeometries _dir _step:1 _substeps:1 = (
+    _str = ""
+    _validGeometries = getValidGeometries()
+    for _o in _validGeometries do (
+        _animated = ( _o.isAnimated or isDeformable _o )
+        _name = normalizeName _o.name
+        _abcfile = _dir + _name + ".abc"
+        _frange = [0,100]
+        _opath = getHierarchy _o
+        if _animated == false then _frange = [currenttime.frame, currenttime.frame] else _frange = [animationrange.start.frame, animationrange.end.frame]
+
+        if InstanceMgr.GetInstances _o undefined > 1 do (
+            _mesh = instance _o
+            _mesh.name = _name + "_mesh"
+            _mesh.transform = matrix3 1
+            _o = _mesh
+        )
+
+        if classOf _o != HairObject and classOf _o != GuidesObject then (
+            _job = "filename=" + _abcfile
+            _job += ";in=" + (_frange[1] as string)
+            _job += ";out=" + (_frange[2] as string)
+            _job += ";step=" + (_step as string)
+            _job += ";substep=" + (_substeps as string)
+            _job += ";purepointcache=false"
+            _job += ";normals=true"
+            _job += ";uvs=true"
+            _job += ";materialids=true"
+            _job += ";exportselected=false"
+            _job += ";objects=" + getHierarchy _o
+            _job += ";flattenhierarchy=true"
+            _job += ";automaticinstancing=true"
+            _job += ";facesets=partitioningFacesetsOnly"
+            _job += ";transformCache=false"
+            _job += ";validateMeshTopology=false"
+            _job += ";renameConflictingNodes=false"
+            _job += ";mergePolyMeshSubtree=true"
+            _job += ";particlesystemtomeshconversion=true"
+            --_job += ";dynamictopology=true"
+            --_job += ";transformCache=true"
+            _job += ";transformCache=false" --TEST
+            _job += ";storageFormat=hdf5"
+
+            _result = ExocortexAlembic.createExportJobs( _job )
+
+            if( _result != 0 ) do (
+                messageBox "Failure - See Maxscript Listener for details." title:"Exocortex Alembic Export"
+                _abcfile = undefined
+            )
+        )else (
+            --https://ephere.com/plugins/autodesk/max/ornatrix/docs/4/Alembic_Export.html#Examples
+            --OxAlembicExport [string filePath] [bool exportSelectedHairs] [int startFrame] [int endFrame] [bool exportRenderVersion] [int upDirection] [int format]
+            try(
+                _result = OxAlembicExport _abcfile true _frange[1] _frange[2]-- false 1 0
+            )catch(_abcfile = undefined)
+        )
+
+        if _abcfile != undefined do
+        (
+
+            _instances = #()
+            _count = InstanceMgr.GetInstances _o &_instances
+            if _count > 1 do (
+                _instances = for i = _instances.count to 1 by -1 where _instances[i] != _o collect _instances[i] --reverse array and exlude _o
+                delete _o
+		    )
+
+            for _o in _instances do (
+
+                if classOf _o != HairObject and classOf _o != GuidesObject then
+                    _str += "AlembicGeometry " +  normalizeName _o.name + " {\n"
+                else
+                    _str += "OxAlembicExport " + normalizeName _o.name + " {\n"
+
+                -- object transforms here...
+                _t_t = maxToHoudiniGetTransforms _o _prerotate:false
+                _t_p_x = for i in _t_t collect ( #( i[1], i[2].position.x / 100. ) )
+                _t_p_y = for i in _t_t collect ( #( i[1], i[2].position.y / 100. ) )
+                _t_p_z = for i in _t_t collect ( #( i[1], i[2].position.z / 100. ) )
+
+                _t_r_x = for i in _t_t collect ( #( i[1], ( i[2].rotation as eulerangles ).x ) )
+                _t_r_y = for i in _t_t collect ( #( i[1], ( i[2].rotation as eulerangles ).y ) )
+                _t_r_z = for i in _t_t collect ( #( i[1], ( i[2].rotation as eulerangles ).z ) )
+
+                _t_s_x = for i in _t_t collect ( #( i[1], i[2].scale.x ) )
+                _t_s_y = for i in _t_t collect ( #( i[1], i[2].scale.y ) )
+                _t_s_z = for i in _t_t collect ( #( i[1], i[2].scale.z ) )
+
+                _str += "  tx=" + formatTuple _t_p_x  + ";\n"
+                _str += "  ty=" + formatTuple _t_p_y  + ";\n"
+                _str += "  tz=" + formatTuple _t_p_z  + ";\n"
+
+                _str += "  rx=" + formatTuple _t_r_x  + ";\n"
+                _str += "  ry=" + formatTuple _t_r_y  + ";\n"
+                _str += "  rz=" + formatTuple _t_r_z  + ";\n"
+
+                _str += "  sx=" + formatTuple _t_s_x  + ";\n"
+                _str += "  sy=" + formatTuple _t_s_y  + ";\n"
+                _str += "  sz=" + formatTuple _t_s_z  + ";\n"
+
+
+                _str += "  filename=\"" + _abcfile + "\";\n"
+                _str += "  object_id=" + _o.gbufferChannel  as string + ";\n"
+                _str += "  wirecolor=Color(" + ( _o.wirecolor.r / 255. ) as string + "," + ( _o.wirecolor.g/ 255. ) as string + "," + ( _o.wirecolor.b / 255. ) as string + ");\n"
+                _str += "  handle=" + _o.inode.handle as string + ";\n"
+                --user properties here...
+                for _line in (FilterString (getUserPropBuffer _o) "\n") do
+                (
+                    _prop_str = substituteString (trimLeft (trimRight _line)) " = " "="
+                    _prop_split = FilterString _prop_str "="
+                    _prop_name = substituteString (toLower _prop_split[1]) "vray_" ""
+                    _prop_val = substituteString (substituteString _prop_split[2] "[" "Color(") "]" ")"
+                    _str += "  " + _prop_name + "=" + _prop_val + ";\n"
+                )
+                _str += "}\n\n"
+
+            )
+        )
+    )
+    clearListener()
+	_str
 )
 
 
@@ -328,24 +392,6 @@ fn exportCameras _step:1 _substeps:1 = (
         _str += "}\n\n"
     )
     _str
-)
-
-
-fn formatBoolean _bool = (
-
-    if _bool == false or _bool == 0 then return "False" else return "True"
-)
-
-
-fn formatColor _color = (
-
-    "Color(" + floatToString( _color.r / 255. ) + "," + floatToString( _color.g / 255. ) + "," + floatToString( _color.b / 255. ) + ")"
-)
-
-
-fn formatAColor _acolor = (
-
-    "AColor(" + floatToString( _acolor.r / 255. ) + "," + floatToString( _acolor.g / 255. ) + "," + floatToString( _acolor.b / 255. ) + "," + floatToString( _acolor.a / 255. ) + ")"
 )
 
 
