@@ -696,7 +696,6 @@ fn writeVRScenefiles = (
     renderSceneDialog.commit()
 
     appendLineToFile ( _filename + ".vrscene" ) "#include \"%\"\n" (_filename + "_cameras.vrscene")
-    --appendLineToFile ( _filename + ".vrscene" ) "#include \"%\"\n" (_filename + "_lights.vrscene") --already exists
     appendLineToFile ( _filename + ".vrscene" ) "#include \"%\"\n" (_filename + "_geometries.vrscene")
     appendLineToFile ( _filename + ".vrscene" ) "#include \"%\"\n" (_filename + "_settings.vrscene")
 
