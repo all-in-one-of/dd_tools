@@ -1,6 +1,10 @@
 fn normalizeName _name = (
     re = dotnetObject "System.Text.RegularExpressions.Regex" "[^a-zA-Z0-9]"
-    re.Replace _name "_"
+    _name = re.Replace _name "_"
+    re = dotnetObject "System.Text.RegularExpressions.Regex" "_+"
+    _name = re.Replace _name "_"
+    re = dotnetObject "System.Text.RegularExpressions.Regex" "_$"
+    re.Replace _name ""
 )
 
 
