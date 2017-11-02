@@ -176,12 +176,14 @@ fn exportGeometries _dir _step:1 _substeps:1 = (
         _opath = getHierarchy _o
         if _animated == false then _frange = [currenttime.frame, currenttime.frame] else _frange = [animationrange.start.frame, animationrange.end.frame]
 
-        if InstanceMgr.GetInstances _o undefined > 1 do (
-            _mesh = instance _o
-            _mesh.name = _name + "_mesh"
-            _mesh.transform = matrix3 1
-            _o = _mesh
-        )
+        --do a copy reset transforms
+        _copy = instance _o
+        _copy.name = _name + "_mesh"
+        _copy.transform.controller.position.controller = Position_XYZ()
+        _copy.transform.controller.rotation.controller = Euler_XYZ()
+        _copy.transform.controller.scale.controller = bezier_scale()
+        _copy.transform = matrix3 1
+        _o = _copy
 
         if classOf _o != HairObject and classOf _o != GuidesObject then (
             _job = "filename=" + _abcfile
@@ -229,7 +231,6 @@ fn exportGeometries _dir _step:1 _substeps:1 = (
             _count = InstanceMgr.GetInstances _o &_instances
             if _count > 1 do (
                 _instances = for i = _instances.count to 1 by -1 where _instances[i] != _o collect _instances[i] --reverse array and exlude _o
-                delete _o
 		    )
 
             for _o in _instances do (
@@ -282,6 +283,9 @@ fn exportGeometries _dir _step:1 _substeps:1 = (
                 _str += "}\n\n"
 
             )
+
+            --delete the copy
+            delete _o
         )
     )
     clearListener()
@@ -676,7 +680,7 @@ fn exportCustomSettings = (
 )
 
 
-fn writeVRScenefiles = (
+fn exportScene = (
 
     _dir = sysinfo.tempdir + "houdini_export_temp\\"
 
@@ -707,4 +711,4 @@ fn writeVRScenefiles = (
     print "scene successfully exported"
 )
 
-writeVRScenefiles()
+exportScene()
