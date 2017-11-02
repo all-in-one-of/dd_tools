@@ -1184,12 +1184,12 @@ class import_scene_from_clipboard():
 
     def zoom_extents_children(self, node):
         node.layoutChildren()
-        self.network_tab.cd(node.path())
+        '''self.network_tab.cd(node.path())
         for child in node.children():
             child.setSelected(True)
         self.network_tab.homeToSelection()
         for child in node.children():
-            child.setSelected(False)
+            child.setSelected(False)'''
 
     def run(self):
         import timeit

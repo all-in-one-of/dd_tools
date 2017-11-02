@@ -146,28 +146,24 @@ fn formatAColor _acolor = (
 
 
 fn getValidGeometries = (
-    _result = for _o in geometry where _o.isHidden == false and _o.renderable == true collect _o
-	_result = for i = _result.count to 1 by -1 collect _result[i] --reverse array
-    for _o in _result do (
-        _instances = #()
-        _count = InstanceMgr.GetInstances _o &_instances
-		_instances = for i = _instances.count to 1 by -1 collect _instances[i] --reverse array
-        while _count > 1 do (
-            for i = _result.count to 1 by -1 do (
-                if _result[i] == _instances[_count] do (
-                    deleteItem _result i
-                    _count -= 1
-                )
-            )
-        )
+    _prefilteredObjects = for _o in geometry where _o.isHidden == false and _o.renderable == true collect _o
+    _instanceslist = #()
+    _filteredOjects = #()
+    for _o in _prefilteredObjects do
+    (
+        if findItem _instanceslist _o == 0 do append _filteredOjects _o
+        InstanceMgr.GetInstances _o &_instances
+        for _i in _instances do appendifunique _instanceslist _i
     )
-    _result
+    _filteredOjects
 )
 
 
 fn exportGeometries _dir _step:1 _substeps:1 = (
     _str = ""
     _validGeometries = getValidGeometries()
+
+    with redraw off
     for _o in _validGeometries do (
         _animated = ( _o.isAnimated or isDeformable _o )
         _name = normalizeName _o.name
@@ -176,16 +172,16 @@ fn exportGeometries _dir _step:1 _substeps:1 = (
         _opath = getHierarchy _o
         if _animated == false then _frange = [currenttime.frame, currenttime.frame] else _frange = [animationrange.start.frame, animationrange.end.frame]
 
-        --do a copy reset transforms
+        --do a copy / reset transforms
         _copy = instance _o
-        _copy.name = _name + "_mesh"
+        _copy.name = _o.name + "_copy"
         _copy.transform.controller.position.controller = Position_XYZ()
         _copy.transform.controller.rotation.controller = Euler_XYZ()
         _copy.transform.controller.scale.controller = bezier_scale()
         _copy.transform = matrix3 1
         _o = _copy
 
-        if classOf _o != HairObject and classOf _o != GuidesObject then (
+        if classOf _copy != HairObject and classOf _copy != GuidesObject then (
             _job = "filename=" + _abcfile
             _job += ";in=" + (_frange[1] as string)
             _job += ";out=" + (_frange[2] as string)
@@ -196,7 +192,7 @@ fn exportGeometries _dir _step:1 _substeps:1 = (
             _job += ";uvs=true"
             _job += ";materialids=true"
             _job += ";exportselected=false"
-            _job += ";objects=" + getHierarchy _o
+            _job += ";objects=" + getHierarchy _copy
             _job += ";flattenhierarchy=true"
             _job += ";automaticinstancing=true"
             _job += ";facesets=partitioningFacesetsOnly"
@@ -214,27 +210,24 @@ fn exportGeometries _dir _step:1 _substeps:1 = (
 
             if( _result != 0 ) do (
                 messageBox "Failure - See Maxscript Listener for details." title:"Exocortex Alembic Export"
-                _abcfile = undefined
+                _abcfile = ""
             )
         )else (
             --https://ephere.com/plugins/autodesk/max/ornatrix/docs/4/Alembic_Export.html#Examples
             --OxAlembicExport [string filePath] [bool exportSelectedHairs] [int startFrame] [int endFrame] [bool exportRenderVersion] [int upDirection] [int format]
             try(
                 _result = OxAlembicExport _abcfile true _frange[1] _frange[2]-- false 1 0
-            )catch(_abcfile = undefined)
+            )catch(_abcfile = "")
         )
-
-        if _abcfile != undefined do
+        if _abcfile != "" do
         (
-
             _instances = #()
-            _count = InstanceMgr.GetInstances _o &_instances
+            _count = InstanceMgr.GetInstances _copy &_instances
             if _count > 1 do (
-                _instances = for i = _instances.count to 1 by -1 where _instances[i] != _o collect _instances[i] --reverse array and exlude _o
-		    )
+                _instances = for i = _instances.count to 1 by -1 where _instances[i] != _copy collect _instances[i] --reverse array and exlude _copy
+            )
 
             for _o in _instances do (
-
                 if classOf _o != HairObject and classOf _o != GuidesObject then
                     _str += "AlembicGeometry " +  normalizeName _o.name + " {\n"
                 else
@@ -272,22 +265,22 @@ fn exportGeometries _dir _step:1 _substeps:1 = (
                 _str += "  wirecolor=Color(" + ( _o.wirecolor.r / 255. ) as string + "," + ( _o.wirecolor.g/ 255. ) as string + "," + ( _o.wirecolor.b / 255. ) as string + ");\n"
                 _str += "  handle=" + _o.inode.handle as string + ";\n"
                 --user properties here...
-                for _line in (FilterString (getUserPropBuffer _o) "\n") do
+                /*for _line in (FilterString (getUserPropBuffer _o) "\n") do
                 (
                     _prop_str = substituteString (trimLeft (trimRight _line)) " = " "="
                     _prop_split = FilterString _prop_str "="
                     _prop_name = substituteString (toLower _prop_split[1]) "vray_" ""
                     _prop_val = substituteString (substituteString _prop_split[2] "[" "Color(") "]" ")"
                     _str += "  " + _prop_name + "=" + _prop_val + ";\n"
-                )
+                )*/
                 _str += "}\n\n"
-
             )
 
             --delete the copy
-            delete _o
+            delete _copy
         )
     )
+
     clearListener()
 	_str
 )
@@ -681,34 +674,37 @@ fn exportCustomSettings = (
 
 
 fn exportScene = (
-
     _dir = sysinfo.tempdir + "houdini_export_temp\\"
 
     makeDir _dir
 
-    _filename = _dir + getFilenameFile maxfilename
+    _filename = _dir +  normalizeName(getFilenameFile maxfilename)
 
     _script = "#scene_export\n\n"
 
-    vrayExportRTScene ( _filename + ".vrscene" ) exportCompressed:false exportHEXFormatMesh:false exportHEXFormatTransf:false separateFiles:true exportView:false exportLights:false exportGeometry:false exportNodes:true exportMaterials:true exportTextures:true exportBitmaps:true prefix:"" stripPaths:false
-
-    _script += "filename," + _filename + ".vrscene" + "\n"
-
-
-    setclipboardText _script
+    try(
+        vrayExportRTScene ( _filename + ".vrscene" ) exportCompressed:false exportHEXFormatMesh:false exportHEXFormatTransf:false separateFiles:true exportView:false exportLights:false exportGeometry:false exportNodes:true exportMaterials:true exportTextures:true exportBitmaps:true prefix:"" stripPaths:false
+    )catch(print "error while creating .vrscene file...")
 
     renderSceneDialog.commit()
 
-    appendLineToFile ( _filename + ".vrscene" ) "#include \"%\"\n" (_filename + "_cameras.vrscene")
-    appendLineToFile ( _filename + ".vrscene" ) "#include \"%\"\n" (_filename + "_geometries.vrscene")
-    appendLineToFile ( _filename + ".vrscene" ) "#include \"%\"\n" (_filename + "_settings.vrscene")
+    try(
+        appendLineToFile ( _filename + ".vrscene" ) "#include \"%\"\n" (_filename + "_cameras.vrscene")
+        appendLineToFile ( _filename + ".vrscene" ) "#include \"%\"\n" (_filename + "_geometries.vrscene")
+        appendLineToFile ( _filename + ".vrscene" ) "#include \"%\"\n" (_filename + "_settings.vrscene")
+    )catch(print "cannot append lines to .vrscene file...")
 
     writeToFile ( _filename + "_settings.vrscene" ) (exportCustomSettings())
     writeToFile ( _filename + "_geometries.vrscene" ) (exportGeometries _dir)
     writeToFile ( _filename + "_cameras.vrscene" ) (exportCameras())
     writeToFile ( _filename + "_lights.vrscene" ) (exportLights())
 
+    _script += "filename," + _filename + ".vrscene" + "\n"
+
+    setclipboardText _script
+
     print "scene successfully exported"
+
 )
 
 exportScene()
