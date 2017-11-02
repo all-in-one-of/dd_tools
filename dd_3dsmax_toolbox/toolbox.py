@@ -94,7 +94,7 @@ class Toolbox(maxparenting.MaxWidget):
         #self.button = QtGui.QPushButton('Refresh')
 
         self.banner = QtGui.QLabel()
-        self.banner.setPixmap(QtGui.QPixmap(os.path.dirname(os.path.abspath(filename)) + '\\header.png'))
+        self.banner.setPixmap(QtGui.QPixmap(os.path.dirname(os.path.abspath(filename)) + '\\header.svg'))
 
         #force interface creation
         self.createInterface()

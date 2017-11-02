@@ -90,7 +90,7 @@ class Toolbox(QtWidgets.QWidget):
         #self.button = QtWidgets.QPushButton('Refresh')
 
         self.banner = QtWidgets.QLabel()
-        self.banner.setPixmap(QtGui.QPixmap(os.path.dirname(os.path.abspath(filename)) + '\\header.png'))
+        self.banner.setPixmap(QtGui.QPixmap(os.path.dirname(os.path.abspath(filename)) + '\\header.svg'))
 
 
         #force interface creation
