@@ -32,6 +32,7 @@ class import_scene_from_clipboard():
                           ('SettingsImageSampler', 'progressive_effectsUpdate'),
                           ('SettingsImageSampler', 'render_mask_clear'), ('SettingsLightCache', 'premultiplied'),
                           ('SettingsIrradianceMap', 'detail_enhancement'), ('SettingsPhotonMap', 'bounces'),
+                          ('SettingsPhotonMap', 'file'),
                           ('SettingsPhotonMap', 'max_photons'),
                           ('SettingsPhotonMap', 'prefilter'), ('SettingsPhotonMap', 'prefilter_samples'),
                           ('SettingsPhotonMap', 'mode'),
@@ -144,7 +145,7 @@ class import_scene_from_clipboard():
                     settings.append({'Type': type, 'Name': name, 'Parms': parms})
 
                 # catch lights
-                elif 'Light' in type:
+                elif 'Light' in type and not 'BRDFLight' in type:
                     lights.append({'Type': type, 'Name': name, 'Parms': parms})
 
                 # catch cameras
@@ -630,7 +631,7 @@ class import_scene_from_clipboard():
 
                 print '\n\n'
 
-        self.zoom_extents_children(render_elements)
+        self.auto_arrange_children(render_elements)
 
         if len(message_stack) != 0:
             print '\n\n\nLoad Render Channels terminated with: ' + str(len(message_stack)) + ' errors:\n'
@@ -819,6 +820,10 @@ class import_scene_from_clipboard():
 
     def add_plugin_node(self, plugins, parent, output_node, input_name, node_name, node_type, node_parms,
                         message_stack, output_name=''):
+
+        '''if node_type == 'TexBezierCurveColor':
+            node_type = 'TexBezierCurve'''
+
         node = self.try_find_or_create_node(parent, 'VRayNode' + node_type, self.normalize_name(node_name),
                                             message_stack)
 
@@ -830,7 +835,6 @@ class import_scene_from_clipboard():
 
             for p in node_parms:
                 parm_name = p['Name']
-                parm_val = p['Value']
                 parm_val = self.try_parse_parm_value(node_name, node_type, parm_name, p['Value'], message_stack)
 
                 if node_type == 'BRDFBump' and parm_name == 'bump_tex':
@@ -876,7 +880,6 @@ class import_scene_from_clipboard():
 
                         self.try_set_input(node, 'uvw_transform', makexform, message_stack)
 
-
                 elif parm_name == 'uvw_matrix':
 
                     matrix = self.try_find_or_create_node(parent, 'parameter', node.name() + '_matrix', message_stack)
@@ -885,12 +888,13 @@ class import_scene_from_clipboard():
                         '''(preRotateX(matrix3[1, 0, 0][0, 0, 1][0, -1, 0][0, 0, 0]) - 90) * _t * inverse(
                             matrix3[1, 0, 0][0, 0, 1][0, -1, 0][0, 0, 0])'''
 
+                        # matrix.setSelected(True)
+
                         self.try_set_parm(matrix, 'parmname', 'uvw_matrix', message_stack)
                         self.try_set_parm(matrix, 'parmtype', 13, message_stack)
 
                         try:
                             rot = parm_val.extractRotates()
-                            # quat = hou.Quaternion(hou.hmath.buildRotate((rot[0] - 90, rot[2], rot[1]), "xyz"))
                             quat = hou.Quaternion(hou.hmath.buildRotate((rot[0] - 90, -rot[2], rot[1]), "xyz"))
                             m3 = quat.extractRotationMatrix3().transposed()
                             self.try_set_parm(matrix, 'float9def', m3, message_stack)
@@ -902,49 +906,27 @@ class import_scene_from_clipboard():
 
                         self.try_set_input(node, 'uvw_matrix', matrix, message_stack)
 
+                        # matrix.setSelected(False)
+                        self.network_tab.cd(node.path()) # TEST
                         matrix.setSelected(True)
-                        # matrix.cook(force=True)
-                        # matrix.updateParmStates()
-                        # matrix.runInitScripts()
                         matrix.setSelected(False)
 
                 elif node_type == 'MtlMulti':
 
                     if parm_name == 'mtls_list':
-
-                        # insert mtlid_gen // necessary for material_ids generation
-                        '''mtlid_gen = parent.node(output_node.name() + '_mtlid_gen')
-                        if mtlid_gen == None:
-                            mtlid_gen = node.insertParmGenerator('mtlid_gen', hou.vopParmGenType.Parameter, False)
-                            mtlid_gen.setName(output_node.name() + '_mtlid_gen')'''
-
-                        '''mtlid_gen = self.try_find_or_create_node(parent, 'parameter', output_node.name() + '_mtlid_gen',
-                                                                 message_stack)'''
-
                         material_id = self.try_find_or_create_node(parent, 'VRayNodeTexSampler',
                                                                    output_node.name() + '_mtlid_gen',
                                                                    message_stack)
 
-                        # if mtlid_gen != None:
                         if material_id != None:
-                            '''self.try_set_parm(mtlid_gen, 'parmname', 'mtlid_gen', message_stack)
-                            self.try_set_parm(mtlid_gen, 'parmtype', 1, message_stack)
-                            self.try_set_parm(mtlid_gen, 'intdef', 0, message_stack)
-                            self.try_set_parm(mtlid_gen, 'invisible', 1, message_stack)
-                            self.try_set_parm(mtlid_gen, 'exportparm', 1, message_stack)
-
-                            self.try_set_input(node, 'mtlid_gen', mtlid_gen, message_stack)'''
+                            # material_id.setSelected(True)
 
                             self.try_set_parm(node, 'mtl_count', len(parm_val), message_stack)
 
-                            self.try_set_input(node, 'mtlid_gen_float', material_id, message_stack, output_index=18)
+                            self.try_set_input(node, 'mtlid_gen_float', material_id, message_stack, 'material_id')
                             material_id.setGenericFlag(hou.nodeFlag.InOutDetailLow, True)
 
-                            '''mtlid_gen.setSelected(True)
-                            mtlid_gen.cook(force=True)
-                            mtlid_gen.updateParmStates()
-                            mtlid_gen.runInitScripts()
-                            mtlid_gen.setSelected(False)'''
+                            # material_id.setSelected(False)
 
                         for i in range(0, len(parm_val)):
                             for nn in plugins:
@@ -983,7 +965,50 @@ class import_scene_from_clipboard():
                                                          nn['Type'],
                                                          nn['Parms'], message_stack)
 
+                elif node_type == 'TexLayeredMax':
+                    if parm_name == 'textures':
+                        self.try_set_parm(node, 'textures_count', len(parm_val), message_stack)
 
+                        parm_val = parm_val[::-1]  # reversed
+                        for i in range(0, len(parm_val)):
+                            for nn in plugins:
+                                if nn['Name'] == parm_val[i]:
+                                    self.add_plugin_node(plugins, parent, node, 'tex_' + str(i + 1), nn['Name'],
+                                                         nn['Type'],
+                                                         nn['Parms'], message_stack)
+
+                    elif parm_name == 'masks':
+                        # use 'VRayNodeTexMaskMax' > inputs: 'texture', 'mask'
+                        # if not 'whiteMask'...
+                        parm_val = parm_val[::-1]  # reversed
+                        for i in range(0, len(parm_val)):
+                            if parm_val[i] != 'whiteMask':
+                                mask = self.try_find_or_create_node(parent, 'VRayNodeTexMaskMax', node.name() + '_mask',
+                                                                    message_stack)
+
+                                if mask != None:
+                                    for nn in plugins:
+                                        if nn['Name'] == parm_val[i]:
+                                            self.add_plugin_node(plugins, parent, mask, 'mask', nn['Name'], nn['Type'],
+                                                                 nn['Parms'], message_stack)
+
+                                    tex_input_index = node.inputIndex('tex_' + str(i + 1))
+                                    tex_node = node.inputs()[tex_input_index]
+
+                                    if tex_node != None:
+                                        self.try_set_input(mask, 'texture', tex_node, message_stack)
+
+                                    self.try_set_input(node, 'tex_' + str(i + 1), mask, message_stack)
+
+                    elif parm_name == 'blend_modes':
+                        parm_val = parm_val[::-1]  # reversed
+                        for i in range(0, len(parm_val)):
+                            self.try_set_parm(node, 'tex' + str(i + 1) + 'blend_mode', parm_val[i], message_stack)
+
+                    elif parm_name == 'opacities':
+                        parm_val = parm_val[::-1]  # reversed
+                        for i in range(0, len(parm_val)):
+                            self.try_set_parm(node, 'tex' + str(i + 1) + 'blend_amount', parm_val[i], message_stack)
 
                 elif node_type == 'TexGradRamp' and parm_name == 'positions':
 
@@ -1003,7 +1028,6 @@ class import_scene_from_clipboard():
                         parm_name = 'color_ramp' + str(i + 1) + 'pos'
                         pos = self.try_parse_parm_value(node_name, node_type, parm_name, parm_val[i], message_stack)
                         self.try_set_parm(node, parm_name, pos, message_stack)
-
 
                 elif node_type == 'TexGradRamp' and parm_name == 'colors':
                     # colors = List(
@@ -1031,7 +1055,6 @@ class import_scene_from_clipboard():
                         parm_name = 'color_ramp' + str(i + 1) + 'interp'
                         interp = self.try_parse_parm_value(node_name, node_type, parm_name, parm_val[i], message_stack)
                         self.try_set_parm(node, parm_name, interp, message_stack)
-
 
 
                 elif '@' in str(parm_val) or 'bitmapBuffer' in str(parm_val):
@@ -1076,11 +1099,11 @@ class import_scene_from_clipboard():
                                              n['Parms'],
                                              message_stack)
 
-                        self.zoom_extents_children(material)
+                        self.auto_arrange_children(material)
 
                         break
 
-        self.zoom_extents_children(shop)
+        self.auto_arrange_children(shop)
 
         if len(message_stack) != 0:
             print '\n\n\nLoad Scene materials terminated with: ' + str(len(message_stack)) + ' errors:\n'
@@ -1162,7 +1185,7 @@ class import_scene_from_clipboard():
 
             print '\n\n'
 
-        self.zoom_extents_children(env)
+        self.auto_arrange_children(env)
 
         if len(message_stack) != 0:
             print '\n\n\nLoad Scene environment terminated with: ' + str(len(message_stack)) + ' errors:\n'
@@ -1182,14 +1205,14 @@ class import_scene_from_clipboard():
         else:
             return str(float("{0:.2f}".format(elapsed))) + ' seconds'
 
-    def zoom_extents_children(self, node):
+    def auto_arrange_children(self, node, fit=False):
         node.layoutChildren()
-        '''self.network_tab.cd(node.path())
+        self.network_tab.cd(node.path())
         for child in node.children():
             child.setSelected(True)
         self.network_tab.homeToSelection()
         for child in node.children():
-            child.setSelected(False)'''
+            child.setSelected(False)
 
     def run(self):
         import timeit
@@ -1256,7 +1279,8 @@ class import_scene_from_clipboard():
                                 self.load_settings(settings)
 
                     obj = hou.node('/obj')
-                    self.zoom_extents_children(obj)
+                    self.network_tab.cd(obj.path())  # TEST
+                    self.auto_arrange_children(obj, True)
 
                     print '\n\n\n#############################################'
                     print '###################  END  ###################'
