@@ -436,6 +436,96 @@ class import_scene_from_clipboard():
 
                     break
 
+    def collect_current_physical_camera_attributes(self, node):
+        """
+        Collects current CameraPhysical attribute values.
+        """
+        parms = dict()
+
+        for pt in node.parmTemplateGroup().entries():
+            attrName = pt.name()
+            if attrName.startswith("CameraPhysical_"):
+                try:
+                    p = node.parm(attrName)
+                    parms[attrName] = p.eval()
+                except:
+                    pass
+
+        return parms
+
+    def remove_current_physical_camera_attributes(self, node, folderLabel):
+        """
+        Removes existing CameraPhysical attributes.
+        """
+        ptg = node.parmTemplateGroup()
+
+        folder = ptg.findFolder(folderLabel)
+        if folder:
+            ptg.remove(folder.name())
+
+        # Removing the folder doesn't remove invisible parameters
+        for pt in ptg.entries():
+            attrName = pt.name()
+            if attrName.startswith("CameraPhysical"):
+                ptg.remove(attrName)
+
+        node.setParmTemplateGroup(ptg)
+
+    def add_physical_camera_attributes(self, node):
+        import os
+        import sys
+        UI = os.environ.get('VRAY_UI_DS_PATH', None)
+
+        if UI is None:
+            return
+
+        physCamDS = os.path.join(UI, "plugins", "CameraPhysical.ds")
+        if not os.path.exists(physCamDS):
+            sys.stderr.write("CameraPhysical.ds is not found!\n")
+            return
+
+        if node.type().name() in {"cam"}:
+
+            folderName = "VfhCameraPhysical"
+            folderLabel = "V-Ray Physical Camera"
+
+            currentSettings = self.collect_current_physical_camera_attributes(node)
+
+            self.remove_current_physical_camera_attributes(node, folderLabel)
+
+            group = node.parmTemplateGroup()
+            folder = hou.FolderParmTemplate(folderName, folderLabel)
+
+            physCamGroup = hou.ParmTemplateGroup()
+            physCamGroup.setToDialogScript(open(physCamDS, 'r').read())
+            for parmTmpl in physCamGroup.parmTemplates():
+                folder.addParmTemplate(parmTmpl)
+
+            group.append(folder)
+            node.setParmTemplateGroup(group)
+
+            for parm in node.parms():
+                try:
+                    attrName = parm.name()
+
+                    parmValue = currentSettings.get(attrName, None)
+                    if parmValue is not None:
+                        parm.set(parmValue)
+                    elif attrName in {"CameraPhysical_f_number"}:
+                        parm.setExpression("ch(\"./fstop\")")
+                    elif attrName in {"CameraPhysical_focus_distance"}:
+                        parm.setExpression("ch(\"./focus\")")
+                    elif attrName in {"CameraPhysical_horizontal_offset"}:
+                        parm.setExpression("-ch(\"./winx\")")
+                    elif attrName in {"CameraPhysical_vertical_offset"}:
+                        parm.setExpression("-ch(\"./winy\")")
+                    elif attrName in {"CameraPhysical_focal_length"}:
+                        parm.setExpression("ch(\"./focal\")")
+                    elif attrName in {"CameraPhysical_film_width"}:
+                        parm.setExpression("ch(\"./aperture\")")
+                except:
+                    pass
+
     def load_cameras(self, cameras, target_objects):
         # loading settings
         message_stack = list()
@@ -458,6 +548,9 @@ class import_scene_from_clipboard():
 
                     if parm_name == 'target':
                         self.try_find_or_create_target_object(obj, camera, parm_val, target_objects, message_stack)
+                    elif parm_name == 'physical':
+                        if parm_val == True:
+                            self.add_physical_camera_attributes(camera)
                     else:
                         print parm_name + " = " + str(parm_val)
                         self.try_set_parm(camera, parm_name, parm_val, message_stack)
