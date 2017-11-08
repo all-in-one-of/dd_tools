@@ -1164,7 +1164,7 @@ fn getColorFromIlluminant _i = (
 fn exportCameras _step:1 _substeps:1 = (
     _str = ""
     --for _o in cameras where classOf _o != Targetobject and ( classOf _o == Freecamera or classOf _o == Targetcamera ) do (
-    for _o in cameras where classOf _o == Freecamera or classOf == Targetcamera or classOf _o == Physical do (
+    for _o in cameras where classOf _o == Freecamera or classOf _o == Targetcamera or classOf _o == Physical do (
 
         --if target
         if _o.target != undefined do (
@@ -1239,45 +1239,51 @@ fn exportCameras _step:1 _substeps:1 = (
         --if physical
         if classOf _o == physical then (
             --type=0
-            _str += "  film_width=" + _o.film_width_mm as string + ";\n"
-            _str += "  focal_length=" + _o.focal_length_mm as string + ";\n"
-            _str += "  zoom_factor=" + _o.zoom_factor as string + ";\n"
-            _str += "  distortion=" + _o.distortion_cubic_amount as string + ";\n"
-            _str += "  distortion_type=" + _o.distortion_type as string + ";\n"
-            _str += "  f_number=" + _o.f_number as string + ";\n"
-            _str += "  lens_shift=" + _o.vertical_tilt_correction as string + ";\n"
-            _str += "  shutter_speed=" + ( 1. / _o.shutter_length_seconds ) as string + ";\n"
-            _str += "  ISO=" + _o.iso as string + ";\n"
-            _str += "  specify_focus=" + formatBoolean _o.specify_focus + ";\n"
-            _str += "  focus_distance=" + _o.focus_distance as string + ";\n"
+            _str += "  CameraPhysical_use=True;\n"
+            _str += "  CameraPhysical_film_width=" + _o.film_width_mm as string + ";\n"
+            _str += "  CameraPhysical_focal_length=" + _o.focal_length_mm as string + ";\n"
+            _str += "  CameraPhysical_zoom_factor=" + _o.zoom_factor as string + ";\n"
+            _str += "  CameraPhysical_distortion=" + _o.distortion_cubic_amount as string + ";\n"
+            _str += "  CameraPhysical_distortion_type='" + _o.distortion_type as string + "';\n"
+            _str += "  CameraPhysical_f_number=" + _o.f_number as string + ";\n"
+            _str += "  CameraPhysical_lens_shift=" + _o.vertical_tilt_correction as string + ";\n"
+            _str += "  CameraPhysical_shutter_speed=" + ( 1. / _o.shutter_length_seconds ) as string + ";\n"
+            _str += "  CameraPhysical_ISO=" + _o.iso as string + ";\n"
+            _str += "  CameraPhysical_specify_focus=" + formatBoolean _o.specify_focus + ";\n"
+            _str += "  CameraPhysical_focus_distance=" + ( _o.focus_distance * 0.01 ) as string + ";\n"
             --targeted=0
-            _str += "  exposure=" + _o.exposure_value as string + ";\n"
+            _str += "  CameraPhysical_exposure=" + _o.exposure_value as string + ";\n"
 
             _white_balance_color = _o.white_balance_custom
             if _o.white_balance_type == 0 then
                 _white_balance_color = getColorFromIlluminant _o.white_balance_illuminant
             else if _o.white_balance_type == 1 then
                 _white_balance_color = getColorFromTemperature _o.white_balance_kelvin
-            _str += "  white_balance=" + formatColor _white_balance_color + ";\n"
+            _str += "  CameraPhysical_white_balance=" + formatColor _white_balance_color + ";\n"
 
-            _str += "  vignetting=" + _o.vignetting_amount as string + ";\n"
+            _str += "  CameraPhysical_vignetting=" + _o.vignetting_amount as string + ";\n"
             --_str += "  blades_enable=" + 1
-            _str += "  blades_num=" + _o.bokeh_blades_number as string + ";\n"
-            _str += "  blades_rotation=" + _o.pb_bokeh_blades_rotation_degrees as string + ";\n"
-            _str += "  center_bias=" + _o.bokeh_center_bias as string + ";\n"
-            _str += "  anisotropy=" + _o.bokeh_anisotropy as string + ";\n"
-            _str += "  use_dof=" + formatBoolean _o.use_dof + ";\n"
-            _str += "  use_moblur=" + formatBoolean _o.motion_blur_enabled + ";\n"
+            _str += "  CameraPhysical_blades_num=" + _o.bokeh_blades_number as string + ";\n"
+            _str += "  CameraPhysical_blades_rotation=" + _o.pb_bokeh_blades_rotation_degrees as string + ";\n"
+            _str += "  CameraPhysical_center_bias=" + _o.bokeh_center_bias as string + ";\n"
+            _str += "  CameraPhysical_anisotropy=" + _o.bokeh_anisotropy as string + ";\n"
+            _str += "  CameraPhysical_use_dof=" + formatBoolean _o.use_dof + ";\n"
+            _str += "  CameraPhysical_use_moblur=" + formatBoolean _o.motion_blur_enabled + ";\n"
             --_str += "  subdivs=" + 1
-            _str += "  specify_fov=" + formatBoolean _o.specify_fov + ";\n"
-            _str += "  fov=" + _o.fov as string + ";\n"
-            _str += "  horizontal_shift=" +  _o.horizontal_tilt_correction as string + ";\n"
-            _str += "  horizontal_offset=" + formatUnits _o.horizontal_shift + ";\n"
+
+            --_str += "  CameraPhysical_specify_fov=" + formatBoolean _o.specify_fov + ";\n"
+            --_str += "  CameraPhysical_fov=" + _o.fov as string + ";\n"
+            _fov = getPropertyValues _o "fov"
+            _lens = for i in _fov collect ( #( i[1], 0.5 * ( GetRendApertureWidth() / tan( i[2]/2.0 ) ) ) )
+            _str += "  CameraPhysical_focal_length=" + formatTuple _lens + ";\n"
+
+            _str += "  CameraPhysical_horizontal_shift=" +  _o.horizontal_tilt_correction as string + ";\n"
+            _str += "  CameraPhysical_horizontal_offset=" + formatUnits _o.horizontal_shift + ";\n"
             --_str += "  vertical_offset=" + 0.0094
             --_str += "  bmpaperture_enable=" + 0
             --_str += "  bmpaperture_resolution=" + 631
-            _str += "  use_vignetting=" +  formatBoolean _o.vignetting_enabled + ";\n"
-            _str += "  optical_vignetting=" + _o.bokeh_optical_vignetting as string + ";\n"
+            _str += "  CameraPhysical_use_vignetting=" +  formatBoolean _o.vignetting_enabled + ";\n"
+            _str += "  CameraPhysical_optical_vignetting=" + _o.bokeh_optical_vignetting as string + ";\n"
 
             if _o.clip_on do (
                 _str += "  near=" + formatTuple( getPropertyValues _o "clip_near" _scale:0.01 ) + ";\n"
@@ -1285,6 +1291,7 @@ fn exportCameras _step:1 _substeps:1 = (
             )
 
         )else (
+            _str += "  CameraPhysical_use=False;\n"
             _str += "  projection=" + ( if _o.orthoProjection then 1 else 0 ) as string + ";\n"
 
             _fov = getPropertyValues _o "fov"

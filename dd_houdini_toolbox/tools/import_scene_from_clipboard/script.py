@@ -141,7 +141,7 @@ class import_scene_from_clipboard():
                     renderChannels.append({'Type': type, 'Name': name, 'Parms': parms})
 
                 # catch vray render settings
-                elif 'Settings' in type:
+                elif 'Settings' in type and not 'SettingsCamera' in type and not 'SettingsUnitsInfo' in type and not 'SettingsCameraDof' in type:
                     settings.append({'Type': type, 'Name': name, 'Parms': parms})
 
                 # catch lights
@@ -149,7 +149,7 @@ class import_scene_from_clipboard():
                     lights.append({'Type': type, 'Name': name, 'Parms': parms})
 
                 # catch cameras
-                elif 'Camera' in type:
+                elif 'Camera' in type and not 'CameraPhysical' in type and not 'SettingsCamera' in type and not 'SettingsCameraDof' in type:
                     cameras.append({'Type': type, 'Name': name, 'Parms': parms})
 
                 # catch target objects
@@ -548,7 +548,7 @@ class import_scene_from_clipboard():
 
                     if parm_name == 'target':
                         self.try_find_or_create_target_object(obj, camera, parm_val, target_objects, message_stack)
-                    elif parm_name == 'physical':
+                    elif parm_name == 'CameraPhysical_use':
                         if parm_val == True:
                             self.add_physical_camera_attributes(camera)
                     else:
