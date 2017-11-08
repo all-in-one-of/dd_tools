@@ -1124,18 +1124,23 @@ fn getColorFromTemperature _k = (
 	)else (
         for i = 1 to _array.count do (
         if _array[i][1] == _k then (
-                return  _array[i][2]
+			_result = _array[i][2]
+			exit
             )else if _array[i][1] > _k do (
                 _k1 = _array[i-1][1]
                 _k2 = _array[i][1]
                 _c1 = _array[i-1][2]
+				print _c1
                 _c2 = _array[i][2]
+				print _c2
                 _f = (_k - _k1) / ( (_k2 - _k1) as float )
-                _result = [( _c2[1] + ( ( _c2[1] - _c1[1] ) * _f ) ) as integer, ( _c2[2] + ( ( _c2[2] - _c1[2]) * _f ) ) as integer, ( _c2[3] + ( ( _c2[3] - _c1[3]) * _f ) ) as integer]
+				print _f
+                _result = [ ( _c2[1] + ( ( _c2[1] - _c1[1] ) * _f ) ) as integer, ( _c2[2] + ( ( _c2[2] - _c1[2] ) * _f ) ) as integer, ( _c2[3] + ( ( _c2[3] - _c1[3] ) * _f ) ) as integer ]
+				exit
             )
         )
 	)
-	_result  as color
+	_result as color
 )
 
 
@@ -1158,6 +1163,14 @@ fn getColorFromIlluminant _i = (
     _bsearch = bsearch #(_i) _array LookupTableComparator
     if _bsearch != undefined then _result = _bsearch[2] else _result = [0,0,0]
     _result  as color
+)
+
+
+fn transformColorGamma _color _gamma:2.2 = (
+    _color.r = 255 * ((_color.r/255.)^_gamma)
+    _color.g = 255 * ((_color.g/255.)^_gamma)
+    _color.b = 255 * ((_color.b/255.)^_gamma)
+    _color
 )
 
 
@@ -1212,8 +1225,6 @@ fn exportCameras _step:1 _substeps:1 = (
 
         _str += "Camera " + normalizeName  _o.name + " {\n"
 
-        _str += "  physical=" + formatBoolean( classOf _o == physical ) + ";\n"
-
         --position
         _str += "  tx=" + formatTuple _p_x + ";\n"
         _str += "  ty=" + formatTuple _p_y + ";\n"
@@ -1240,14 +1251,19 @@ fn exportCameras _step:1 _substeps:1 = (
         if classOf _o == physical then (
             --type=0
             _str += "  CameraPhysical_use=True;\n"
-            _str += "  CameraPhysical_film_width=" + _o.film_width_mm as string + ";\n"
-            _str += "  CameraPhysical_focal_length=" + _o.focal_length_mm as string + ";\n"
-            _str += "  CameraPhysical_zoom_factor=" + _o.zoom_factor as string + ";\n"
+
+
+
+
+            _str += "  CameraPhysical_parm_distortion_enable=" + formatBoolean( _o.distortion_type == 1 or _o.distortion_type == 2 ) + ";\n"
             _str += "  CameraPhysical_distortion=" + _o.distortion_cubic_amount as string + ";\n"
             _str += "  CameraPhysical_distortion_type='" + _o.distortion_type as string + "';\n"
+
             _str += "  CameraPhysical_f_number=" + _o.f_number as string + ";\n"
             _str += "  CameraPhysical_lens_shift=" + _o.vertical_tilt_correction as string + ";\n"
+
             _str += "  CameraPhysical_shutter_speed=" + ( 1. / _o.shutter_length_seconds ) as string + ";\n"
+
             _str += "  CameraPhysical_ISO=" + _o.iso as string + ";\n"
             _str += "  CameraPhysical_specify_focus=" + formatBoolean _o.specify_focus + ";\n"
             _str += "  CameraPhysical_focus_distance=" + ( _o.focus_distance * 0.01 ) as string + ";\n"
@@ -1259,7 +1275,7 @@ fn exportCameras _step:1 _substeps:1 = (
                 _white_balance_color = getColorFromIlluminant _o.white_balance_illuminant
             else if _o.white_balance_type == 1 then
                 _white_balance_color = getColorFromTemperature _o.white_balance_kelvin
-            _str += "  CameraPhysical_white_balance=" + formatColor _white_balance_color + ";\n"
+            _str += "  CameraPhysical_white_balance=" + formatColor( _white_balance_color ) + ";\n"
 
             _str += "  CameraPhysical_vignetting=" + _o.vignetting_amount as string + ";\n"
             --_str += "  blades_enable=" + 1
@@ -1271,11 +1287,16 @@ fn exportCameras _step:1 _substeps:1 = (
             _str += "  CameraPhysical_use_moblur=" + formatBoolean _o.motion_blur_enabled + ";\n"
             --_str += "  subdivs=" + 1
 
+            --_str += "  CameraPhysical_film_width=" + _o.film_width_mm as string + ";\n"
+            _str += "  aperture=" + _o.film_width_mm as string + ";\n"
+            _str += "  CameraPhysical_zoom_factor=" + _o.zoom_factor as string + ";\n"
+
             --_str += "  CameraPhysical_specify_fov=" + formatBoolean _o.specify_fov + ";\n"
             --_str += "  CameraPhysical_fov=" + _o.fov as string + ";\n"
-            _fov = getPropertyValues _o "fov"
-            _lens = for i in _fov collect ( #( i[1], 0.5 * ( GetRendApertureWidth() / tan( i[2]/2.0 ) ) ) )
-            _str += "  CameraPhysical_focal_length=" + formatTuple _lens + ";\n"
+            --_fov = getPropertyValues _o "fov"
+            --_lens = for i in _fov collect ( #( i[1], 0.5 * ( GetRendApertureWidth() / tan( i[2]/2.0 ) ) ) )
+            --_str += "  CameraPhysical_focal_length=" + formatTuple _lens + ";\n"
+            _str += "  CameraPhysical_focal_length=" + _o.focal_length_mm as string + ";\n"
 
             _str += "  CameraPhysical_horizontal_shift=" +  _o.horizontal_tilt_correction as string + ";\n"
             _str += "  CameraPhysical_horizontal_offset=" + formatUnits _o.horizontal_shift + ";\n"
@@ -1302,19 +1323,21 @@ fn exportCameras _step:1 _substeps:1 = (
                 _str += "  near=" + formatTuple( getPropertyValues _o "nearclip" _scale:0.01 ) + ";\n"
                 _str += "  far=" + formatTuple( getPropertyValues _o "farclip" _scale:0.01 ) + ";\n"
             )
+
+            _str += "  aperture=" + (getRendApertureWidth()) as string + ";\n"
         )
 
-        _str += "  aperture=" + (getRendApertureWidth()) as string + ";\n"
         _str += "  resx=" + renderWidth as string + ";\n"
         _str += "  resy=" + renderHeight as string + ";\n"
         _str += "  aspect=" + renderPixelAspect as string + ";\n"
 
-
-        if _o.targetDistance.controller != undefined do
+        if _o.targetDistance.controller != undefined then
             _str += "  focus=" + formatTuple( getPropertyValues _o "targetDistance" _scale:0.01 ) + ";\n"
-
-
-
+        else
+            if _o.target != undefined then
+                _str += "  focus=" + ( ( distance _o _o.target ) * 0.01 ) as string + ";\n"
+            else
+                _str += "  focus=" + ( _o.target_distance * 0.01 ) as string + ";\n"
 
         --if target
         if _o.target != undefined do
@@ -1466,10 +1489,10 @@ fn exportLights _step:1 _substeps:1 = (
                 4 : (
                     --Disc
                     _str += "  is_disc=True;\n"
-                    _str += "  u_size=" + (_o.size0 / 100.) as string + ";\n"
-                    _str += "  v_size=" + (_o.size1 / 100.) as string + ";\n"
+                    _str += "  u_size=" + (_o.size0 * 2 / 100.) as string + ";\n"
+                    _str += "  v_size=" + (_o.size1 * 2 / 100.) as string + ";\n"
                     _str += "  directional=" + _o.lightDistribution as string + ";\n"
-                    _str += "  ignoreLightNormals=" + _o.ignoreNormals as string + ";\n"
+                    _str += "  ignoreLightNormals=" + formatBoolean( _o.ignoreNormals ) + ";\n"
                     _str += "  doubleSided=" + formatBoolean( _o.doubleSided ) + ";\n"
                     _str += "  lightPortal=" + (get_lightPortal _o) as string + ";\n"
                     _str += "  noDecay=" + formatBoolean( _o.noDecay ) + ";\n"
@@ -1590,19 +1613,25 @@ fn exportLights _step:1 _substeps:1 = (
 
 
 fn exportCustomSettings = (
-    _name = normalizeName( getFilenameFile maxfilename )
-    _cam = if getActiveCamera() != undefined then normalizeName( (getActiveCamera()).name ) else ""
-    _fps = (framerate as float) as string
-    _range = [animationrange.start.frame as integer , animationrange.end.frame as integer] as string
-    _frame = (currenttime.frame as float) as string
-
-    _str = "CustomSettings scene_settings {\n  name=\"" + _name + "\";\n  camera=\"" + _cam + "\";\n  fps=" + _fps + ";\n  range=" + _range + ";\n  frame=" + _frame + ";\n}\n"
-
+    _str = ""
+    try(
+        _name = normalizeName( getFilenameFile maxfilename )
+        _cam = if getActiveCamera() != undefined then normalizeName( (getActiveCamera()).name ) else ""
+        _fps = (framerate as float) as string
+        _range = [animationrange.start.frame as integer , animationrange.end.frame as integer] as string
+        _frame = (currenttime.frame as float) as string
+        _str += "\nCustomSettings scene_settings {\n  name=\"" + _name + "\";\n  camera=\"" + _cam + "\";\n  fps=" + _fps + ";\n  range=" + _range + ";\n  frame=" + _frame + ";\n}\n"
+    )catch()
+    /*
     try(
         _aa_filter = if renderers.current.filter_on == false then 0 else filter_kernel_convert renderers.current.filter_kernel as string
         _str += "\nSettingsImageSampler aa_filter {\n  filter_type=" + _aa_filter + ";\n}\n"
     )catch()
-
+    */
+    try(
+        _focus_from_camera = formatBoolean renderers.current.dof_getFromCamera
+        _str += "\nSettingsCameraDof settingsCameraDOF {\n  focus_from_camera=" + _focus_from_camera + ";\n}\n"
+    )catch()
     _str
 )
 

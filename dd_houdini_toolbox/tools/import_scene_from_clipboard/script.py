@@ -7,12 +7,16 @@ except ImportError:
 
 
 class import_scene_from_clipboard():
-    metric_parms = (('SettingsCameraDof', 'aperture'), ('SettingsCameraDof', 'focal_dist'),
+    metric_parms = (('SettingsCameraDof', 'focal_dist'), ('TexDirt', 'radius'),
                     ('RenderChannelZDepth', 'depth_black'), ('Mtl2Sided', 'translucency_tex_mult'),
                     ('TexFalloff', 'dist_near'), ('TexFalloff', 'dist_far'),
                     ('RenderChannelZDepth', 'depth_white'))  # parameters that need to be scaled
 
-    black_listed_parms = (('TexFalloff', 'use_blend_input'),
+    black_listed_parms = (('TexFalloff', 'use_blend_input'), ('SettingsColorMapping', 'exposure'),
+                          ('FilterLanczos', 'size'), ('FilterArea', 'size'), ('FilterGaussian', 'size'),
+                          ('FilterCookVariable', 'size'), ('FilterSinc', 'size'), ('FilterBox', 'size'),
+                          ('FilterTriangle', 'size'), ('FilterMitNet','size'), ('FilterMitNet','blur'),
+                          ('FilterMitNet', 'ringing'),
                           ('BRDFVRayMtl', 'roughness_model'), ('BRDFVRayMtl', 'option_use_roughness'),
                           ('LightRectangle', 'lightPortal'), ('LightRectangle', 'units'),
                           ('LightRectangle', 'map_color'),
@@ -141,7 +145,8 @@ class import_scene_from_clipboard():
                     renderChannels.append({'Type': type, 'Name': name, 'Parms': parms})
 
                 # catch vray render settings
-                elif 'Settings' in type and not 'SettingsCamera' in type and not 'SettingsUnitsInfo' in type and not 'SettingsCameraDof' in type:
+                # elif 'Settings' in type and type != 'SettingsCamera':
+                elif 'Settings' in type or name == 'aaFilter':
                     settings.append({'Type': type, 'Name': name, 'Parms': parms})
 
                 # catch lights
@@ -149,7 +154,7 @@ class import_scene_from_clipboard():
                     lights.append({'Type': type, 'Name': name, 'Parms': parms})
 
                 # catch cameras
-                elif 'Camera' in type and not 'CameraPhysical' in type and not 'SettingsCamera' in type and not 'SettingsCameraDof' in type:
+                elif 'Camera' in type and not 'CameraPhysical' in type and not 'SettingsCamera' in type:
                     cameras.append({'Type': type, 'Name': name, 'Parms': parms})
 
                 # catch target objects
@@ -299,6 +304,30 @@ class import_scene_from_clipboard():
         print '#############################################\n\n'
 
         for s in settings:
+
+            if s['Name'] == 'aaFilter':
+                filter_type = 0
+                if s['Type'] == 'FilterArea':
+                    filter_type = 1
+                elif s['Type'] == 'FilterBox':
+                    filter_type = 2
+                elif s['Type'] == 'FilterCatmullRom':
+                    filter_type = 3
+                elif s['Type'] == 'FilterCookVariable':
+                    filter_type = 4
+                elif s['Type'] == 'FilterGaussian':
+                    filter_type = 5
+                elif s['Type'] == 'FilterLanczos':
+                    filter_type = 6
+                elif s['Type'] == 'FilterMitNet':
+                    filter_type = 7
+                elif s['Type'] == 'FilterSinc':
+                    filter_type = 8
+                elif s['Type'] == 'FilterTriangle':
+                    filter_type = 9
+
+                self.try_set_parm(vray_rop, 'SettingsImageSampler_filter_type', filter_type, message_stack)
+
             for p in s['Parms']:
                 parm_name = p['Name']
                 parm_val = self.try_parse_parm_value(s['Name'], s['Type'], parm_name, p['Value'], message_stack)
@@ -1000,7 +1029,7 @@ class import_scene_from_clipboard():
                         self.try_set_input(node, 'uvw_matrix', matrix, message_stack)
 
                         # matrix.setSelected(False)
-                        self.network_tab.cd(node.path()) # TEST
+                        self.network_tab.cd(node.path())  # TEST
                         matrix.setSelected(True)
                         matrix.setSelected(False)
 
