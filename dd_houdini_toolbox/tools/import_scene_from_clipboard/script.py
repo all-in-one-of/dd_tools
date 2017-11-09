@@ -7,12 +7,14 @@ except ImportError:
 
 
 class import_scene_from_clipboard():
+    # ('SettingsCameraDof', 'aperture'),
     metric_parms = (('SettingsCameraDof', 'focal_dist'), ('TexDirt', 'radius'),
                     ('RenderChannelZDepth', 'depth_black'), ('Mtl2Sided', 'translucency_tex_mult'),
                     ('TexFalloff', 'dist_near'), ('TexFalloff', 'dist_far'),
                     ('RenderChannelZDepth', 'depth_white'))  # parameters that need to be scaled
 
-    black_listed_parms = (('TexFalloff', 'use_blend_input'), ('SettingsColorMapping', 'exposure'),
+    # ('SettingsColorMapping', 'exposure'),
+    black_listed_parms = (('TexFalloff', 'use_blend_input'),
                           ('FilterLanczos', 'size'), ('FilterArea', 'size'), ('FilterGaussian', 'size'),
                           ('FilterCookVariable', 'size'), ('FilterSinc', 'size'), ('FilterBox', 'size'),
                           ('FilterTriangle', 'size'), ('FilterMitNet','size'), ('FilterMitNet','blur'),
@@ -1091,7 +1093,7 @@ class import_scene_from_clipboard():
                     if parm_name == 'textures':
                         self.try_set_parm(node, 'textures_count', len(parm_val), message_stack)
 
-                        parm_val = parm_val[::-1]  # reversed
+                        #parm_val = parm_val[::-1]  # reversed
                         for i in range(0, len(parm_val)):
                             for nn in plugins:
                                 if nn['Name'] == parm_val[i]:
@@ -1102,7 +1104,7 @@ class import_scene_from_clipboard():
                     elif parm_name == 'masks':
                         # use 'VRayNodeTexMaskMax' > inputs: 'texture', 'mask'
                         # if not 'whiteMask'...
-                        parm_val = parm_val[::-1]  # reversed
+                        #parm_val = parm_val[::-1]  # reversed
                         for i in range(0, len(parm_val)):
                             if parm_val[i] != 'whiteMask':
                                 mask = self.try_find_or_create_node(parent, 'VRayNodeTexMaskMax', node.name() + '_mask',
@@ -1123,12 +1125,12 @@ class import_scene_from_clipboard():
                                     self.try_set_input(node, 'tex_' + str(i + 1), mask, message_stack)
 
                     elif parm_name == 'blend_modes':
-                        parm_val = parm_val[::-1]  # reversed
+                        #parm_val = parm_val[::-1]  # reversed
                         for i in range(0, len(parm_val)):
                             self.try_set_parm(node, 'tex' + str(i + 1) + 'blend_mode', parm_val[i], message_stack)
 
                     elif parm_name == 'opacities':
-                        parm_val = parm_val[::-1]  # reversed
+                        #parm_val = parm_val[::-1]  # reversed
                         for i in range(0, len(parm_val)):
                             self.try_set_parm(node, 'tex' + str(i + 1) + 'blend_amount', parm_val[i], message_stack)
 

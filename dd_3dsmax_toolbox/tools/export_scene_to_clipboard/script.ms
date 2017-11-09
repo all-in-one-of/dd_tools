@@ -1270,12 +1270,14 @@ fn exportCameras _step:1 _substeps:1 = (
             --targeted=0
             _str += "  CameraPhysical_exposure=" + _o.exposure_value as string + ";\n"
 
+            /*
             _white_balance_color = _o.white_balance_custom
             if _o.white_balance_type == 0 then
                 _white_balance_color = getColorFromIlluminant _o.white_balance_illuminant
             else if _o.white_balance_type == 1 then
                 _white_balance_color = getColorFromTemperature _o.white_balance_kelvin
             _str += "  CameraPhysical_white_balance=" + formatColor( _white_balance_color ) + ";\n"
+            */
 
             _str += "  CameraPhysical_vignetting=" + _o.vignetting_amount as string + ";\n"
             --_str += "  blades_enable=" + 1
@@ -1288,7 +1290,7 @@ fn exportCameras _step:1 _substeps:1 = (
             --_str += "  subdivs=" + 1
 
             --_str += "  CameraPhysical_film_width=" + _o.film_width_mm as string + ";\n"
-            _str += "  aperture=" + _o.film_width_mm as string + ";\n"
+            --_str += "  aperture=" + _o.film_width_mm as string + ";\n"
             _str += "  CameraPhysical_zoom_factor=" + _o.zoom_factor as string + ";\n"
 
             --_str += "  CameraPhysical_specify_fov=" + formatBoolean _o.specify_fov + ";\n"
@@ -1296,7 +1298,7 @@ fn exportCameras _step:1 _substeps:1 = (
             --_fov = getPropertyValues _o "fov"
             --_lens = for i in _fov collect ( #( i[1], 0.5 * ( GetRendApertureWidth() / tan( i[2]/2.0 ) ) ) )
             --_str += "  CameraPhysical_focal_length=" + formatTuple _lens + ";\n"
-            _str += "  CameraPhysical_focal_length=" + _o.focal_length_mm as string + ";\n"
+            --_str += "  CameraPhysical_focal_length=" + _o.focal_length_mm as string + ";\n"
 
             _str += "  CameraPhysical_horizontal_shift=" +  _o.horizontal_tilt_correction as string + ";\n"
             _str += "  CameraPhysical_horizontal_offset=" + formatUnits _o.horizontal_shift + ";\n"
@@ -1315,17 +1317,17 @@ fn exportCameras _step:1 _substeps:1 = (
             _str += "  CameraPhysical_use=False;\n"
             _str += "  projection=" + ( if _o.orthoProjection then 1 else 0 ) as string + ";\n"
 
-            _fov = getPropertyValues _o "fov"
-            _lens = for i in _fov collect ( #( i[1], 0.5 * ( GetRendApertureWidth() / tan( i[2]/2.0 ) ) ) )
-            _str += "  focal=" + formatTuple _lens + ";\n"
-
             if _o.clipManually do (
                 _str += "  near=" + formatTuple( getPropertyValues _o "nearclip" _scale:0.01 ) + ";\n"
                 _str += "  far=" + formatTuple( getPropertyValues _o "farclip" _scale:0.01 ) + ";\n"
             )
-
-            _str += "  aperture=" + (getRendApertureWidth()) as string + ";\n"
         )
+
+        _fov = getPropertyValues _o "fov"
+        _lens = for i in _fov collect ( #( i[1], 0.5 * ( GetRendApertureWidth() / tan( i[2]/2.0 ) ) ) )
+        _str += "  focal=" + formatTuple _lens + ";\n"
+
+        _str += "  aperture=" + (getRendApertureWidth()) as string + ";\n"
 
         _str += "  resx=" + renderWidth as string + ";\n"
         _str += "  resy=" + renderHeight as string + ";\n"
@@ -1646,6 +1648,8 @@ fn exportScene = (
     _script = "#scene_export\n\n"
 
     try(
+        enabledVRActiveShade = ((renderers.activeShade.classid[1] == 1770671000) and (renderers.activeShade.classid[2] == 1323107829))
+		if (not enabledVRActiveShade) do renderers.activeShade=VRayRT()
         vrayExportRTScene ( _filename + ".vrscene" ) exportCompressed:false exportHEXFormatMesh:false exportHEXFormatTransf:false separateFiles:true exportView:false exportLights:false exportGeometry:false exportNodes:true exportMaterials:true exportTextures:true exportBitmaps:true prefix:"" stripPaths:false
     )catch(print "error while creating .vrscene file...")
 
