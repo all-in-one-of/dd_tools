@@ -11,13 +11,14 @@ class import_scene_from_clipboard():
     metric_parms = (('SettingsCameraDof', 'focal_dist'), ('TexDirt', 'radius'),
                     ('RenderChannelZDepth', 'depth_black'), ('Mtl2Sided', 'translucency_tex_mult'),
                     ('TexFalloff', 'dist_near'), ('TexFalloff', 'dist_far'),
-                    ('RenderChannelZDepth', 'depth_white'))  # parameters that need to be scaled
+                    ('RenderChannelZDepth', 'depth_white'),
+                    ('TexEdges', 'world_width'))  # parameters that need to be scaled
 
     # ('SettingsColorMapping', 'exposure'),
     black_listed_parms = (('TexFalloff', 'use_blend_input'),
                           ('FilterLanczos', 'size'), ('FilterArea', 'size'), ('FilterGaussian', 'size'),
                           ('FilterCookVariable', 'size'), ('FilterSinc', 'size'), ('FilterBox', 'size'),
-                          ('FilterTriangle', 'size'), ('FilterMitNet','size'), ('FilterMitNet','blur'),
+                          ('FilterTriangle', 'size'), ('FilterMitNet', 'size'), ('FilterMitNet', 'blur'),
                           ('FilterMitNet', 'ringing'),
                           ('BRDFVRayMtl', 'roughness_model'), ('BRDFVRayMtl', 'option_use_roughness'),
                           ('LightRectangle', 'lightPortal'), ('LightRectangle', 'units'),
@@ -240,8 +241,25 @@ class import_scene_from_clipboard():
                     1).replace(' ', '').replace('\n', '').split(',')
 
             elif parm_val.startswith('List'):
-                result = (re.match(r"List\((.*?)\)", parm_val, re.MULTILINE | re.DOTALL)).group(
-                    1).replace(' ', '').replace('\n', '').split(',')
+                # can be list of multiples types: AColor, int...
+
+                if 'AColor' in parm_val:
+                    matches = re.finditer(r"AColor\((.*?)\)", parm_val, re.MULTILINE | re.DOTALL)
+                    result = list()
+                    for matchNum, match in enumerate(matches):
+                        acolor = 'AColor(' + match.group(1).strip() + ')'
+                        result.append(acolor)
+
+                elif 'Color' in parm_val:
+                    matches = re.finditer(r"Color\((.*?)\)", parm_val, re.MULTILINE | re.DOTALL)
+                    result = list()
+                    for matchNum, match in enumerate(matches):
+                        color = 'Color(' + match.group(1).strip() + ')'
+                        result.append(color)
+
+                else:
+                    result = (re.match(r"List\((.*?)\)", parm_val, re.MULTILINE | re.DOTALL)).group(
+                        1).replace(' ', '').replace('\n', '').split(',')
 
             elif parm_val.startswith('Vector'):
                 result = hou.Vector3(eval(parm_val[6:]))
@@ -1093,7 +1111,7 @@ class import_scene_from_clipboard():
                     if parm_name == 'textures':
                         self.try_set_parm(node, 'textures_count', len(parm_val), message_stack)
 
-                        #parm_val = parm_val[::-1]  # reversed
+                        # parm_val = parm_val[::-1]  # reversed
                         for i in range(0, len(parm_val)):
                             for nn in plugins:
                                 if nn['Name'] == parm_val[i]:
@@ -1104,7 +1122,7 @@ class import_scene_from_clipboard():
                     elif parm_name == 'masks':
                         # use 'VRayNodeTexMaskMax' > inputs: 'texture', 'mask'
                         # if not 'whiteMask'...
-                        #parm_val = parm_val[::-1]  # reversed
+                        # parm_val = parm_val[::-1]  # reversed
                         for i in range(0, len(parm_val)):
                             if parm_val[i] != 'whiteMask':
                                 mask = self.try_find_or_create_node(parent, 'VRayNodeTexMaskMax', node.name() + '_mask',
@@ -1125,12 +1143,57 @@ class import_scene_from_clipboard():
                                     self.try_set_input(node, 'tex_' + str(i + 1), mask, message_stack)
 
                     elif parm_name == 'blend_modes':
-                        #parm_val = parm_val[::-1]  # reversed
+                        # parm_val = parm_val[::-1]  # reversed
                         for i in range(0, len(parm_val)):
                             self.try_set_parm(node, 'tex' + str(i + 1) + 'blend_mode', parm_val[i], message_stack)
 
                     elif parm_name == 'opacities':
-                        #parm_val = parm_val[::-1]  # reversed
+                        # parm_val = parm_val[::-1]  # reversed
+                        for i in range(0, len(parm_val)):
+                            self.try_set_parm(node, 'tex' + str(i + 1) + 'blend_amount', parm_val[i], message_stack)
+
+                elif node_type == 'TexMulti':
+                    if parm_name == 'ids_list':
+                        self.try_set_parm(node, 'textures_count', len(parm_val), message_stack)
+
+                        # parm_val = parm_val[::-1]  # reversed
+                        for i in range(0, len(parm_val)):
+                            for nn in plugins:
+                                if nn['Name'] == parm_val[i]:
+                                    self.add_plugin_node(plugins, parent, node, 'tex_' + str(i + 1), nn['Name'],
+                                                         nn['Type'],
+                                                         nn['Parms'], message_stack)
+
+                    elif parm_name == 'masks':
+                        # use 'VRayNodeTexMaskMax' > inputs: 'texture', 'mask'
+                        # if not 'whiteMask'...
+                        # parm_val = parm_val[::-1]  # reversed
+                        for i in range(0, len(parm_val)):
+                            if parm_val[i] != 'whiteMask':
+                                mask = self.try_find_or_create_node(parent, 'VRayNodeTexMaskMax', node.name() + '_mask',
+                                                                    message_stack)
+
+                                if mask != None:
+                                    for nn in plugins:
+                                        if nn['Name'] == parm_val[i]:
+                                            self.add_plugin_node(plugins, parent, mask, 'mask', nn['Name'], nn['Type'],
+                                                                 nn['Parms'], message_stack)
+
+                                    tex_input_index = node.inputIndex('tex_' + str(i + 1))
+                                    tex_node = node.inputs()[tex_input_index]
+
+                                    if tex_node != None:
+                                        self.try_set_input(mask, 'texture', tex_node, message_stack)
+
+                                    self.try_set_input(node, 'tex_' + str(i + 1), mask, message_stack)
+
+                    elif parm_name == 'blend_modes':
+                        # parm_val = parm_val[::-1]  # reversed
+                        for i in range(0, len(parm_val)):
+                            self.try_set_parm(node, 'tex' + str(i + 1) + 'blend_mode', parm_val[i], message_stack)
+
+                    elif parm_name == 'opacities':
+                        # parm_val = parm_val[::-1]  # reversed
                         for i in range(0, len(parm_val)):
                             self.try_set_parm(node, 'tex' + str(i + 1) + 'blend_amount', parm_val[i], message_stack)
 
@@ -1179,6 +1242,114 @@ class import_scene_from_clipboard():
                         parm_name = 'color_ramp' + str(i + 1) + 'interp'
                         interp = self.try_parse_parm_value(node_name, node_type, parm_name, parm_val[i], message_stack)
                         self.try_set_parm(node, parm_name, interp, message_stack)
+
+                elif node_type == 'TexSoftbox' and parm_name == 'grad_vert_pos':
+                    # grad_vert_pos = ['0', '1']
+
+                    # init ramp with default values (
+                    count = len(parm_val)
+                    rampData = hou.Ramp([hou.rampBasis.Linear] * count, [x * 1. / (count - 1) for x in range(0, count)],
+                                        [(0.0, 0.0, 0.0)] * count)
+                    try:
+                        node.setParms({'ramp_grad_vert': rampData})
+                    except:
+                        message_stack.append('Cannot setting color_ramp...')
+                        # ) end init ramp
+
+                    for i in range(0, len(parm_val)):
+                        parm_name = 'ramp_grad_vert' + str(i + 1) + 'pos'
+                        pos = self.try_parse_parm_value(node_name, node_type, parm_name, parm_val[i], message_stack)
+                        self.try_set_parm(node, parm_name, pos, message_stack)
+
+                elif node_type == 'TexSoftbox' and parm_name == 'grad_vert_col':
+                    # grad_vert_col = ['AColor(0', '1', '0.9882354', '1']
+
+                    for i in range(0, len(parm_val)):
+                        parm_name = 'ramp_grad_vert' + str(i + 1) + 'c'
+                        c = self.try_parse_parm_value(node_name, node_type, parm_name, parm_val[i], message_stack)
+                        c = hou.Vector3((c.x(), c.y(), c.z()))  # Vector4 to Vector3
+                        self.try_set_parm(node, parm_name, c, message_stack)
+
+                elif node_type == 'TexSoftbox' and parm_name == 'grad_horiz_pos':
+                    # grad_horiz_pos = ['0', '1']
+
+                    # init ramp with default values (
+                    count = len(parm_val)
+                    rampData = hou.Ramp([hou.rampBasis.Linear] * count, [x * 1. / (count - 1) for x in range(0, count)],
+                                        [(0.0, 0.0, 0.0)] * count)
+                    try:
+                        node.setParms({'ramp_grad_horiz': rampData})
+                    except:
+                        message_stack.append('Cannot setting color_ramp...')
+                        # ) end init ramp
+
+                    for i in range(0, len(parm_val)):
+                        parm_name = 'ramp_grad_horiz' + str(i + 1) + 'pos'
+                        pos = self.try_parse_parm_value(node_name, node_type, parm_name, parm_val[i], message_stack)
+                        self.try_set_parm(node, parm_name, pos, message_stack)
+
+                elif node_type == 'TexSoftbox' and parm_name == 'grad_horiz_col':
+                    # grad_horiz_col = ['AColor(0', '1', '0.9882354', '1']
+
+                    for i in range(0, len(parm_val)):
+                        parm_name = 'ramp_grad_horiz' + str(i + 1) + 'c'
+                        c = self.try_parse_parm_value(node_name, node_type, parm_name, parm_val[i], message_stack)
+                        c = hou.Vector3((c.x(), c.y(), c.z()))  # Vector4 to Vector3
+                        self.try_set_parm(node, parm_name, c, message_stack)
+
+                elif node_type == 'TexSoftbox' and parm_name == 'grad_rad_pos':
+                    # grad_rad_pos = ['0', '1']
+
+                    # init ramp with default values (
+                    count = len(parm_val)
+                    rampData = hou.Ramp([hou.rampBasis.Linear] * count, [x * 1. / (count - 1) for x in range(0, count)],
+                                        [(0.0, 0.0, 0.0)] * count)
+                    try:
+                        node.setParms({'grad_rad_on': rampData})
+                    except:
+                        message_stack.append('Cannot setting color_ramp...')
+                        # ) end init ramp
+
+                    for i in range(0, len(parm_val)):
+                        parm_name = 'grad_rad_on' + str(i + 1) + 'pos'
+                        pos = self.try_parse_parm_value(node_name, node_type, parm_name, parm_val[i], message_stack)
+                        self.try_set_parm(node, parm_name, pos, message_stack)
+
+                elif node_type == 'TexSoftbox' and parm_name == 'grad_rad_col':
+                    # grad_rad_col = ['AColor(0', '1', '0.9882354', '1']
+
+                    for i in range(0, len(parm_val)):
+                        parm_name = 'grad_rad_on' + str(i + 1) + 'c'
+                        c = self.try_parse_parm_value(node_name, node_type, parm_name, parm_val[i], message_stack)
+                        c = hou.Vector3((c.x(), c.y(), c.z()))  # Vector4 to Vector3
+                        self.try_set_parm(node, parm_name, c, message_stack)
+
+                elif node_type == 'TexSoftbox' and parm_name == 'frame_pos':
+                    # frame_col = ['0', '1']
+
+                    # init ramp with default values (
+                    count = len(parm_val)
+                    rampData = hou.Ramp([hou.rampBasis.Linear] * count, [x * 1. / (count - 1) for x in range(0, count)],
+                                        [(0.0, 0.0, 0.0)] * count)
+                    try:
+                        node.setParms({'frame_on': rampData})
+                    except:
+                        message_stack.append('Cannot setting color_ramp...')
+                        # ) end init ramp
+
+                    for i in range(0, len(parm_val)):
+                        parm_name = 'frame_on' + str(i + 1) + 'pos'
+                        pos = self.try_parse_parm_value(node_name, node_type, parm_name, parm_val[i], message_stack)
+                        self.try_set_parm(node, parm_name, pos, message_stack)
+
+                elif node_type == 'TexSoftbox' and parm_name == 'frame_col':
+                    # frame_col = ['AColor(0', '1', '0.9882354', '1']
+
+                    for i in range(0, len(parm_val)):
+                        parm_name = 'frame_on' + str(i + 1) + 'c'
+                        c = self.try_parse_parm_value(node_name, node_type, parm_name, parm_val[i], message_stack)
+                        c = hou.Vector3((c.x(), c.y(), c.z()))  # Vector4 to Vector3
+                        self.try_set_parm(node, parm_name, c, message_stack)
 
 
                 elif '@' in str(parm_val) or 'bitmapBuffer' in str(parm_val):
