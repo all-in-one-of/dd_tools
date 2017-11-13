@@ -1,6 +1,5 @@
 fn filter_kernel_convert _val = case classOf _val of (Area : 1;VRayBoxFilter : 2;Catmull_Rom : 3;Cook_Variable : 4;Soften : 5;VRayLanczosFilter : 6;Mitchell_Netravali : 7;VRayMitNetFilter : 7;VRaySincFilter : 8;VRayTriangleFilter : 9;default : 6)
 
-
 fn appendLineToFile _f _str _var = (
 
     try(
@@ -11,12 +10,10 @@ fn appendLineToFile _f _str _var = (
     )catch(print "cannot append line to file...")
 )
 
-
 fn writeToFile _f _str = (
 
     (dotNetClass "System.IO.File").WriteAllText _f _str
 )
-
 
 fn getHierarchy _o _opath:"" = (
 	_opath = "/" + _o.name + _opath
@@ -27,13 +24,11 @@ fn getHierarchy _o _opath:"" = (
 	_opath
 )
 
-
 fn getListenerCurrentPos = (
     setListenerSel #(-1,-1)
     _pos = (getListenerSel())[1]
     _pos
 )
-
 
 fn clearListnerFromPos _from = (
     setListenerSel #(-1,-1)
@@ -44,14 +39,12 @@ fn clearListnerFromPos _from = (
 
 )
 
-
 fn maxToHoudiniTransform _t _prerotate = (
     if _prerotate == false then
         ( matrix3 [1,0,0] [0,0,1] [0,-1,0] [0,0,0] ) * _t * inverse( matrix3 [1,0,0] [0,0,1] [0,-1,0] [0,0,0] )
     else
         ( preRotateX ( matrix3 [1,0,0] [0,0,1] [0,-1,0] [0,0,0] ) -90 ) * _t * inverse( matrix3 [1,0,0] [0,0,1] [0,-1,0] [0,0,0] )
 )
-
 
 fn maxToHoudiniGetTransforms _o _prerotate:false _step:1 _substeps:1 = (
     _result = #()
@@ -62,19 +55,16 @@ fn maxToHoudiniGetTransforms _o _prerotate:false _step:1 _substeps:1 = (
     _result
 )
 
-
 fn normalizeName _name = (
     re = dotnetObject "System.Text.RegularExpressions.Regex" "[^a-zA-Z0-9@]"
     re.Replace _name "_"
 )
-
 
 fn floatToString _float = (
     _split = FilterString ( _float as string ) "."
     if _split[2] as integer == 0 do _float = _float as integer
     _float as string
 )
-
 
 fn getPropertyValues _o _name _step:1 _substeps:1 _scale:1 = (
 
@@ -93,7 +83,6 @@ fn getPropertyValues _o _name _step:1 _substeps:1 _scale:1 = (
     _result
 )
 
-
 fn isAnimatedTuple _tuple = (
 
     _firstVal = _tuple[1][2]
@@ -108,7 +97,6 @@ fn isAnimatedTuple _tuple = (
     )
     _isAnimated
 )
-
 
 fn formatTuple _tuple = (
 
@@ -126,30 +114,25 @@ fn formatTuple _tuple = (
     _result
 )
 
-
 fn formatBoolean _bool = (
 
     if _bool == false or _bool == 0 then return "False" else return "True"
 )
-
 
 fn formatColor _color = (
 
     "Color(" + floatToString( _color.r / 255. ) + "," + floatToString( _color.g / 255. ) + "," + floatToString( _color.b / 255. ) + ")"
 )
 
-
 fn formatAColor _acolor = (
 
     "AColor(" + floatToString( _acolor.r / 255. ) + "," + floatToString( _acolor.g / 255. ) + "," + floatToString( _acolor.b / 255. ) + "," + floatToString( _acolor.a / 255. ) + ")"
 )
 
-
 fn formatUnits _value = (
 
     ( _value / 100.0 ) as string
 )
-
 
 fn getValidGeometries = (
     _prefilteredObjects = for _o in geometry where _o.isHidden == false and _o.renderable == true collect _o
@@ -163,7 +146,6 @@ fn getValidGeometries = (
     )
     _filteredOjects
 )
-
 
 fn exportGeometries _dir _step:1 _substeps:1 = (
     _str = ""
@@ -290,7 +272,6 @@ fn exportGeometries _dir _step:1 _substeps:1 = (
     clearListener()
 	_str
 )
-
 
 fn getColorFromTemperature _k = (
     --given a temperature (in Kelvin), estimate an RGB equivalent (based on data)
@@ -1143,7 +1124,6 @@ fn getColorFromTemperature _k = (
 	_result as color
 )
 
-
 fn getColorFromIlluminant _i = (
     _array = #(
     #(0, [255,255,255]), #(1, [255,219,173]), #(2, [229,239,255]), #(3, [255,242,225]), #(4, [255,138,48]),
@@ -1165,14 +1145,12 @@ fn getColorFromIlluminant _i = (
     _result  as color
 )
 
-
 fn transformColorGamma _color _gamma:2.2 = (
     _color.r = 255 * ((_color.r/255.)^_gamma)
     _color.g = 255 * ((_color.g/255.)^_gamma)
     _color.b = 255 * ((_color.b/255.)^_gamma)
     _color
 )
-
 
 fn exportCameras _step:1 _substeps:1 = (
     _str = ""
@@ -1349,7 +1327,6 @@ fn exportCameras _step:1 _substeps:1 = (
     )
     _str
 )
-
 
 fn exportLights _step:1 _substeps:1 = (
 
@@ -1613,7 +1590,6 @@ fn exportLights _step:1 _substeps:1 = (
     _str
 )
 
-
 fn exportCustomSettings = (
     _str = ""
     try(
@@ -1637,7 +1613,6 @@ fn exportCustomSettings = (
     _str
 )
 
-
 fn exportScene = (
     _dir = sysinfo.tempdir + "houdini_export_temp\\"
 
@@ -1650,7 +1625,12 @@ fn exportScene = (
     try(
         enabledVRActiveShade = ((renderers.activeShade.classid[1] == 1770671000) and (renderers.activeShade.classid[2] == 1323107829))
 		if (not enabledVRActiveShade) do renderers.activeShade=VRayRT()
-        vrayExportRTScene ( _filename + ".vrscene" ) exportCompressed:false exportHEXFormatMesh:false exportHEXFormatTransf:false separateFiles:true exportView:false exportLights:false exportGeometry:false exportNodes:true exportMaterials:true exportTextures:true exportBitmaps:true prefix:"" stripPaths:false
+
+        _deleteMesh = DeleteMesh()
+		for _o in geometry do addModifier _o _deleteMesh
+        vrayExportRTScene ( _filename + ".vrscene" ) exportCompressed:true exportHEXFormatMesh:true exportHEXFormatTransf:false separateFiles:true exportView:false exportLights:false exportGeometry:true exportNodes:true exportMaterials:true exportTextures:true exportBitmaps:true prefix:"" stripPaths:false
+        for _o in geometry do deleteModifier _o _deleteMesh
+
     )catch(print "error while creating .vrscene file...")
 
     renderSceneDialog.commit()
@@ -1674,4 +1654,6 @@ fn exportScene = (
 
 )
 
-exportScene()
+
+with undo "Export Scene To Clipboard" on
+    exportScene()
