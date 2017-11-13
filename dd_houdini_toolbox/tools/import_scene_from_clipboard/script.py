@@ -84,7 +84,7 @@ class import_scene_from_clipboard():
 
     def parse_vrscene_file(self, fname, plugins, cameras, lights, settings, renderChannels, nodes, environments,
                            geometries,
-                           targetObjects):
+                           targetObjects, displacements):
 
         import re
         import os
@@ -167,6 +167,10 @@ class import_scene_from_clipboard():
                 # catch geometries
                 elif 'Geometry' in type:
                     geometries.append({'Type': type, 'Name': name, 'Parms': parms})
+
+                # catch displacements
+                elif 'GeomDisplacedMesh' in type:
+                    displacements.append({'Type': type, 'Name': name, 'Parms': parms})
 
                 else:
                     # plugins.append({'Type': 'VRayNode' + type, 'Name': name, 'Parms': parms})
@@ -803,7 +807,7 @@ class import_scene_from_clipboard():
             geoviewport = hou.ui.paneTabOfType(hou.paneTabType.SceneViewer).curViewport()
             wirecolor_vis.setIsActive(True, viewport=geoviewport)
 
-    def load_nodes(self, nodes, geometries, materials):
+    def load_nodes(self, nodes, geometries, materials, displacements):
         import os
         import shutil
         from os.path import basename
@@ -825,6 +829,14 @@ class import_scene_from_clipboard():
             material_name = self.normalize_name(material.split('@', 1)[0])
             materials.append({'Name': material_name, 'Codename': material})
 
+            displacement = None
+            displacement_name = n['Parms'][[i for i, s in enumerate(n['Parms']) if 'geometry' in s['Name']][0]]['Value']
+            if 'mesh_displaced' in displacement_name:
+                for d in displacements:
+                    if d['Name'] == displacement_name:
+                        displacement = d
+                        break
+
             # here search for the corresponding geometry
             geometry = None
             for g in geometries:
@@ -842,6 +854,29 @@ class import_scene_from_clipboard():
 
                     self.add_vray_objectid_param_template(geo)
                     geo.parm('shop_materialpath').set('/shop/' + material_name)
+
+                    if displacement != None:
+                        print 'displacement != None' * 1000
+                        # displacement_tex_color
+                        # displacement_amount
+                        import vfh.shelftools.vrayattr as vrayattr
+                        HOUDINI_SOHO_DEVELOPER = os.environ.get("HOUDINI_SOHO_DEVELOPER", False)
+                        if HOUDINI_SOHO_DEVELOPER:
+                            print "Reloading: %s" % (vrayattr)
+                            reload(vrayattr)
+                        print 'vrayattr.addVRayDisplamentParams' * 1000
+                        vrayattr.addVRayDisplamentParams(geo)
+                        for p in displacement['Parms']:
+                            parm_name = p['Name']
+                            parm_val = p['Value']
+
+                            if parm_name == 'displacement_tex_color':
+                                # load texture map here...
+                                pass
+                            else:
+                                parm_val = self.try_parse_parm_value(name, n['Type'], parm_name, parm_val, message_stack)
+                                self.try_set_parm(geo, 'GeomDisplacedMesh_' + parm_name, parm_val, message_stack)
+
 
                 # retrieving geometry parameters
                 from_filename = ''
@@ -1529,6 +1564,7 @@ class import_scene_from_clipboard():
         environments = list()
         geometries = list()
         target_objects = list()
+        displacements = list()
 
         if lines.count > 1:
             if lines[0] == '#scene_export':
@@ -1563,11 +1599,11 @@ class import_scene_from_clipboard():
                             if ls[0] == 'filename':
                                 self.parse_vrscene_file(ls[1], plugins, cameras, lights, settings, render_channels,
                                                         nodes,
-                                                        environments, geometries, target_objects)
+                                                        environments, geometries, target_objects, displacements)
 
                                 self.load_cameras(cameras, target_objects)
                                 self.load_lights(lights, target_objects)
-                                self.load_nodes(nodes, geometries, materials)
+                                self.load_nodes(nodes, geometries, materials, displacements)
                                 self.load_materials(plugins, materials)
                                 self.load_environments(plugins, environments)
                                 self.load_render_channels(plugins, render_channels)
