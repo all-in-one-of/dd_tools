@@ -15,7 +15,13 @@ class import_scene_from_clipboard():
                     ('TexEdges', 'world_width'))  # parameters that need to be scaled
 
     # ('SettingsColorMapping', 'exposure'),
-    black_listed_parms = (('TexFalloff', 'use_blend_input'),
+    black_listed_parms = (('TexFalloff', 'use_blend_input'), ('RenderChannelMultiMatte', 'enableDeepOutput'),
+                          ('RenderChannelBumpNormals', 'enableDeepOutput'),
+                          ('RenderChannelDenoiser', 'enableDeepOutput'),
+                          ('RenderChannelDRBucket', 'enableDeepOutput'), ('RenderChannelExtraTex', 'enableDeepOutput'),
+                          ('RenderChannelNormals', 'enableDeepOutput'), ('RenderChannelNodeID', 'enableDeepOutput'),
+                          ('RenderChannelRenderID', 'enableDeepOutput'), ('RenderChannelVelocity', 'enableDeepOutput'),
+                          ('RenderChannelZDepth', 'enableDeepOutput'),
                           ('FilterLanczos', 'size'), ('FilterArea', 'size'), ('FilterGaussian', 'size'),
                           ('FilterCookVariable', 'size'), ('FilterSinc', 'size'), ('FilterBox', 'size'),
                           ('FilterTriangle', 'size'), ('FilterMitNet', 'size'), ('FilterMitNet', 'blur'),
@@ -23,11 +29,6 @@ class import_scene_from_clipboard():
                           ('BRDFVRayMtl', 'roughness_model'), ('BRDFVRayMtl', 'option_use_roughness'),
                           ('LightRectangle', 'lightPortal'), ('LightRectangle', 'units'),
                           ('LightRectangle', 'map_color'),
-                          ('RenderChannelDRBucket', 'enableDeepOutput'), ('RenderChannelDenoiser', 'enableDeepOutput'),
-                          ('RenderChannelColor', 'enableDeepOutput'), ('RenderChannelBumpNormals', 'enableDeepOutput'),
-                          ('RenderChannelNormals', 'enableDeepOutput'), ('RenderChannelExtraTex', 'enableDeepOutput'),
-                          ('RenderChannelNodeID', 'enableDeepOutput'), ('RenderChannelRenderID', 'enableDeepOutput'),
-                          ('RenderChannelVelocity', 'enableDeepOutput'), ('RenderChannelZDepth', 'enableDeepOutput'),
                           ('ColorCorrection', 'adv_exposure_mode'), ('ColorCorrection', 'adv_printer_lights_per'),
                           ('SettingsRTEngine', 'low_gpu_thread_priority'),
                           ('SettingsRTEngine', 'interactive'), ('SettingsRTEngine', 'enable_cpu_interop'),
@@ -807,7 +808,7 @@ class import_scene_from_clipboard():
             geoviewport = hou.ui.paneTabOfType(hou.paneTabType.SceneViewer).curViewport()
             wirecolor_vis.setIsActive(True, viewport=geoviewport)
 
-    def load_nodes(self, nodes, geometries, materials, displacements):
+    def load_nodes(self, nodes, geometries, materials, displacements, plugins):
         import os
         import shutil
         from os.path import basename
@@ -856,15 +857,12 @@ class import_scene_from_clipboard():
                     geo.parm('shop_materialpath').set('/shop/' + material_name)
 
                     if displacement != None:
-                        print 'displacement != None' * 1000
                         # displacement_tex_color
                         # displacement_amount
                         import vfh.shelftools.vrayattr as vrayattr
                         HOUDINI_SOHO_DEVELOPER = os.environ.get("HOUDINI_SOHO_DEVELOPER", False)
                         if HOUDINI_SOHO_DEVELOPER:
-                            print "Reloading: %s" % (vrayattr)
                             reload(vrayattr)
-                        print 'vrayattr.addVRayDisplamentParams' * 1000
                         vrayattr.addVRayDisplamentParams(geo)
                         for p in displacement['Parms']:
                             parm_name = p['Name']
@@ -872,11 +870,24 @@ class import_scene_from_clipboard():
 
                             if parm_name == 'displacement_tex_color':
                                 # load texture map here...
-                                pass
-                            else:
-                                parm_val = self.try_parse_parm_value(name, n['Type'], parm_name, parm_val, message_stack)
-                                self.try_set_parm(geo, 'GeomDisplacedMesh_' + parm_name, parm_val, message_stack)
 
+                                parent = geo.createNode('matnet', 'displacement')
+                                output_node = None
+                                for nn in plugins:
+                                    if nn['Name'] == str(parm_val):
+                                        self.add_plugin_node(plugins, parent, output_node, parm_name,
+                                                             self.normalize_name(nn['Name']),
+                                                             nn['Type'], nn['Parms'], message_stack)
+
+                                    geo.parm('GeomDisplacedMesh_displacement_texture').set(
+                                        '`chs("displacement/' + self.normalize_name(nn['Name']) + '")`')  # TEMP...
+
+                                parent.layoutChildren()
+
+                            else:
+                                parm_val = self.try_parse_parm_value(name, n['Type'], parm_name, parm_val,
+                                                                     message_stack)
+                                self.try_set_parm(geo, 'GeomDisplacedMesh_' + parm_name, parm_val, message_stack)
 
                 # retrieving geometry parameters
                 from_filename = ''
@@ -984,16 +995,17 @@ class import_scene_from_clipboard():
             if result != -1:
                 output_index = result
 
-        input_index = output_node.inputIndex(input_name)
+        if output_node != None:
+            input_index = output_node.inputIndex(input_name)
 
-        if input_index != -1:
-            try:
-                output_node.setInput(input_index, node, output_index)
-            except:
-                message_stack.append('cannot set input: ' + str(
-                    input_name) + ' from node: ' + output_node.name() + ' to node: ' + node.name())
-        else:
-            message_stack.append('cannot find input: ' + str(input_name) + ' on node: ' + output_node.name())
+            if input_index != -1:
+                try:
+                    output_node.setInput(input_index, node, output_index)
+                except:
+                    message_stack.append('cannot set input: ' + str(
+                        input_name) + ' from node: ' + output_node.name() + ' to node: ' + node.name())
+            else:
+                message_stack.append('cannot find input: ' + str(input_name) + ' on node: ' + output_node.name())
 
     def add_plugin_node(self, plugins, parent, output_node, input_name, node_name, node_type, node_parms,
                         message_stack, output_name=''):
@@ -1603,7 +1615,7 @@ class import_scene_from_clipboard():
 
                                 self.load_cameras(cameras, target_objects)
                                 self.load_lights(lights, target_objects)
-                                self.load_nodes(nodes, geometries, materials, displacements)
+                                self.load_nodes(nodes, geometries, materials, displacements, plugins)
                                 self.load_materials(plugins, materials)
                                 self.load_environments(plugins, environments)
                                 self.load_render_channels(plugins, render_channels)
