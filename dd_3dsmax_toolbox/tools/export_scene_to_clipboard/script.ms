@@ -61,8 +61,10 @@ fn normalizeName _name = (
 )
 
 fn floatToString _float = (
-    _split = FilterString ( _float as string ) "."
-    if _split[2] as integer == 0 do _float = _float as integer
+	if findString ( _float as string ) "e" == undefined do (
+		_split = FilterString ( _float as string ) "."
+		if _split[2] as integer == 0 do _float = _float as integer
+	)
     _float as string
 )
 
