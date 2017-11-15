@@ -1183,9 +1183,9 @@ fn exportCameras _step:1 _substeps:1 = (
             _str += "  ry=" + formatTuple _t_r_y  + ";\n"
             _str += "  rz=" + formatTuple _t_r_z  + ";\n"
 
-            _str += "  sx=" + formatTuple _t_s_x  + ";\n"
-            _str += "  sy=" + formatTuple _t_s_y  + ";\n"
-            _str += "  sz=" + formatTuple _t_s_z  + ";\n"
+            --_str += "  sx=" + formatTuple _t_s_x  + ";\n"
+            --_str += "  sy=" + formatTuple _t_s_y  + ";\n"
+            --_str += "  sz=" + formatTuple _t_s_z  + ";\n"
             _str += "}\n\n"
         )
 
@@ -1359,9 +1359,9 @@ fn exportLights _step:1 _substeps:1 = (
             _str += "  ry=" + formatTuple _t_r_y  + ";\n"
             _str += "  rz=" + formatTuple _t_r_z  + ";\n"
 
-            _str += "  sx=" + formatTuple _t_s_x  + ";\n"
-            _str += "  sy=" + formatTuple _t_s_y  + ";\n"
-            _str += "  sz=" + formatTuple _t_s_z  + ";\n"
+            --_str += "  sx=" + formatTuple _t_s_x  + ";\n"
+            --_str += "  sy=" + formatTuple _t_s_y  + ";\n"
+            --_str += "  sz=" + formatTuple _t_s_z  + ";\n"
             _str += "}\n\n"
         )
 
@@ -1615,6 +1615,18 @@ fn exportCustomSettings = (
     _str
 )
 
+fn getUsedUVChannels _o = (
+    _used_channels = #()
+    if classOf _o == Editable_Poly or classOf _o == PolyMeshObject then (
+        for i in 1 to polyOp.getNumMaps _o do
+            if polyOp.getMapSupport _o i then append _used_channels i
+    ) else (
+        for i in 1 to meshOp.getNumMaps _o do
+            if meshOp.getMapSupport _o i then append _used_channels i
+    )
+    _used_channels
+)
+
 fn exportScene = (
     _dir = sysinfo.tempdir + "houdini_export_temp\\"
 
@@ -1628,12 +1640,25 @@ fn exportScene = (
         enabledVRActiveShade = ((renderers.activeShade.classid[1] == 1770671000) and (renderers.activeShade.classid[2] == 1323107829))
 		if (not enabledVRActiveShade) do renderers.activeShade=VRayRT()
 
-        _deleteMesh = DeleteMesh()
-		for _o in geometry do addModifier _o _deleteMesh
-        vrayExportRTScene ( _filename + ".vrscene" ) exportCompressed:true exportHEXFormatMesh:true exportHEXFormatTransf:false separateFiles:true exportView:false exportLights:false exportGeometry:true exportNodes:true exportMaterials:true exportTextures:true exportBitmaps:true prefix:"" stripPaths:false
-        for _o in geometry do deleteModifier _o _deleteMesh
+        suspendEditing()
 
-    )catch(print "error while creating .vrscene file...")
+            for _o in geometry do (
+                addModifier _o (DeleteMesh name:"_delete_mesh_tmp")
+                for _id in getUsedUVChannels _o do (
+                    addModifier _o (UVW_Mapping_Clear mapID:_id name:"_delete_uv_tmp")
+                )
+            )
+
+            vrayExportRTScene ( _filename + ".vrscene" ) exportCompressed:true exportHEXFormatMesh:true exportHEXFormatTransf:false separateFiles:true exportView:false exportLights:false exportGeometry:true exportNodes:true exportMaterials:true exportTextures:true exportBitmaps:true prefix:"" stripPaths:false
+            for _o in geometry do (
+                for i = _o.modifiers.count to 1 by -1 do (
+                    _m = _o.modifiers[i]
+                    if _m.name == "_delete_mesh_tmp" or _m.name == "_delete_uv_tmp" do deleteModifier _o _m
+                )
+            )
+        resumeEditing()
+
+    )catch(resumeEditing();print "error while creating .vrscene file...")
 
     renderSceneDialog.commit()
 
@@ -1658,4 +1683,4 @@ fn exportScene = (
 
 
 with undo "Export Scene To Clipboard" on
-    exportScene()
+     exportScene()

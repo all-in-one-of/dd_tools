@@ -361,7 +361,10 @@ class import_scene_from_clipboard():
 
                 if s['Type'] == 'CustomSettings':
                     if parm_name == 'name':
-                        hou.hipFile.setName(parm_val)
+                        # hou.hipFile.setName(parm_val)
+                        hip_dir = hou.getenv('HIP')
+                        self.set_environment_variable('HIPFILE', hip_dir + '/' + parm_val + '.hip')
+                        self.set_environment_variable('HIPNAME', parm_val)
                     elif parm_name == 'camera':
                         cam = None
                         if parm_val == '':
@@ -817,7 +820,8 @@ class import_scene_from_clipboard():
         message_stack = list()
         obj = hou.node('/obj')
 
-        geo_dir = hou.expandString('$HIP') + '/geo/'
+        # geo_dir = hou.expandString('$HIP') + '/geo/'
+        geo_dir = hou.getenv('HIP') + '/geo/'
 
         print '\n\n\n#############################################'
         print '###########  LOADING SCENE NODES  ###########'
@@ -913,13 +917,14 @@ class import_scene_from_clipboard():
 
                 # copy cache file from temp location to .hip/geo dir
                 if os.path.isfile(from_filename):
-                    to_filename = geo_dir + basename(from_filename) + ".abc"
+                    to_filename = geo_dir + basename(from_filename)  # + ".abc"
                     try:
                         # shutil.move(from_filename, to_filename)
                         shutil.copy(from_filename, to_filename)
                     except IOError:
                         os.chmod(to_filename, 777)  # ?? still can raise exception
                         shutil.move(from_filename, to_filename)
+                        message_stack.append('Cannot copy .abc file...')
 
                 geo.parm('vray_objectID').set(object_id)
                 geo.parm('use_dcolor').set(True)
@@ -930,7 +935,7 @@ class import_scene_from_clipboard():
                 alembic = geo.node('alembic1')
                 if alembic == None:
                     alembic = geo.createNode('alembic')
-                alembic.parm('fileName').set('$HIP/geo/' + basename(from_filename) + ".abc")
+                alembic.parm('fileName').set('$HIP/geo/' + basename(from_filename))  # + ".abc")
                 alembic.parm('reload').pressButton()
 
                 xform = geo.node('xform1')
@@ -1556,6 +1561,17 @@ class import_scene_from_clipboard():
         for child in node.children():
             child.setSelected(False)
 
+    def set_environment_variable(self, var, value):
+        import os
+        os.environ[var] = value
+        try:
+            hou.allowEnvironmentVariableToOverwriteVariable(var, True)
+        except AttributeError:
+            hou.allowEnvironmentToOverwriteVariable(var, True)
+
+        hscript_command = "set %s = %s" % (var, value)
+        hou.hscript(str(hscript_command))
+
     def run(self):
         import timeit
         import datetime
@@ -1586,7 +1602,11 @@ class import_scene_from_clipboard():
                                             file_type=hou.fileType.Directory)
 
                 if hip_dir != '':
-                    hou.putenv('$HIP', hip_dir)
+                    if hip_dir.endswith('/'):
+                        hip_dir =hip_dir[:-1]# remove last '/'
+
+                    self.set_environment_variable('HIP', hip_dir)
+                    self.set_environment_variable('HIPFILE', hip_dir + '/untitled.hip')
                 else:
                     hip_dir = last_hip_dir
 
