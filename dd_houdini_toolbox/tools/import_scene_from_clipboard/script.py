@@ -1111,8 +1111,11 @@ class import_scene_from_clipboard():
                 elif node_type == 'MtlMulti':
 
                     if parm_name == 'mtls_list':
+                        empty_material = self.try_find_or_create_node(parent, 'VRayNodeMtlDiffuse',
+                                                                      node.name() + '_emty_mtl', message_stack)
+
                         material_id = self.try_find_or_create_node(parent, 'VRayNodeTexSampler',
-                                                                   output_node.name() + '_mtlid_gen',
+                                                                   node.name() + '_mtlid_gen',
                                                                    message_stack)
 
                         if material_id != None:
@@ -1122,15 +1125,19 @@ class import_scene_from_clipboard():
 
                             self.try_set_input(node, 'mtlid_gen_float', material_id, message_stack, 'material_id')
                             material_id.setGenericFlag(hou.nodeFlag.InOutDetailLow, True)
-
                             # material_id.setSelected(False)
 
                         for i in range(0, len(parm_val)):
+                            self.try_set_input(node, 'mtl_' + str(i + 1), empty_material, message_stack)
+
                             for nn in plugins:
                                 if nn['Name'] == parm_val[i]:
                                     self.add_plugin_node(plugins, parent, node, 'mtl_' + str(i + 1), nn['Name'],
                                                          nn['Type'],
                                                          nn['Parms'], message_stack)
+
+                        if len(empty_material.outputs()) == 0:
+                            empty_material.destroy()
 
                     elif parm_name == 'ids_list':
 
