@@ -361,10 +361,13 @@ class import_scene_from_clipboard():
 
                 if s['Type'] == 'CustomSettings':
                     if parm_name == 'name':
-                        # hou.hipFile.setName(parm_val)
                         hip_dir = hou.getenv('HIP')
+                        hou.hipFile.setName(parm_val)
+                        # self.set_environment_variable('JOB', hip_dir)
+                        self.set_environment_variable('HIP', hip_dir)
                         self.set_environment_variable('HIPFILE', hip_dir + '/' + parm_val + '.hip')
                         self.set_environment_variable('HIPNAME', parm_val)
+
                     elif parm_name == 'camera':
                         cam = None
                         if parm_val == '':
@@ -1605,6 +1608,7 @@ class import_scene_from_clipboard():
                     if hip_dir.endswith('/'):
                         hip_dir =hip_dir[:-1]# remove last '/'
 
+                    # self.set_environment_variable('JOB', hip_dir)
                     self.set_environment_variable('HIP', hip_dir)
                     self.set_environment_variable('HIPFILE', hip_dir + '/untitled.hip')
                 else:
