@@ -9,13 +9,62 @@ except ImportError:
 class import_scene_from_clipboard():
     # ('SettingsCameraDof', 'aperture'),
     metric_parms = (('SettingsCameraDof', 'focal_dist'), ('TexDirt', 'radius'),
+                    ('LightIES', 'shadowBias'), ('LightDome', 'shadowBias'), ('LightDome', 'dome_rayDistance'),
+                    ('LightRectangle', 'u_size'), ('LightRectangle', 'v_size'), ('LightRectangle', 'shadowBias'),
+                    ('LightSphere', 'radius'), ('LightSphere', 'shadowBias'),
+                    ('LightMesh', 'shadowBias'),
+                    ('SunLight', 'shadowBias'), ('SunLight', 'photon_radius'),
+                    ('LightAmbientMax', 'gi_min_distance'),
+                    ('LightIESMax', 'shadowBias'), ('LightIESMax', 'ies_light_width'),
+                    ('LightIESMax', 'ies_light_length'), ('LightIESMax', 'ies_light_height'),
+                    ('LightIESMax', 'ies_light_diameter'),
+                    ('LightSpotMax', 'shadowBias'), ('LightSpotMax', 'near_attenuation_start'),
+                    ('LightSpotMax', 'near_attenuation_end'),
+                    ('LightSpotMax', 'far_attenuation_start'), ('LightSpotMax', 'far_attenuation_end'),
+
+                    ('LightDirectMax', 'shadowBias'), ('LightDirectMax', 'near_attenuation_start'),
+                    ('LightDirectMax', 'near_attenuation_end'),
+                    ('LightDirectMax', 'far_attenuation_start'), ('LightDirectMax', 'far_attenuation_end'),
+
+                    ('LightOmniMax', 'shadowBias'), ('LightOmniMax', 'near_attenuation_start'),
+                    ('LightOmniMax', 'near_attenuation_end'),
+                    ('LightOmniMax', 'far_attenuation_start'), ('LightOmniMax', 'far_attenuation_end'),
+
                     ('RenderChannelZDepth', 'depth_black'), ('Mtl2Sided', 'translucency_tex_mult'),
                     ('TexFalloff', 'dist_near'), ('TexFalloff', 'dist_far'),
                     ('RenderChannelZDepth', 'depth_white'),
                     ('TexEdges', 'world_width'))  # parameters that need to be scaled
 
+    deg_to_rad_parms = (('LightSpotMax', 'fallsize'), ('LightSpotMax', 'hotspot'))
+
     # ('SettingsColorMapping', 'exposure'),
     black_listed_parms = (('TexFalloff', 'use_blend_input'), ('RenderChannelMultiMatte', 'enableDeepOutput'),
+                          ('SunLight', 'blend_angle'), ('SunLight', 'horizon_offset'),
+                          ('LightAmbientMax', 'mode'), ('LightAmbientMax', 'gi_min_distance'),
+                          ('LightAmbientMax', 'color'),
+                          ('LightAmbientMax', 'compensate_exposure'),
+                          ('LightSpotMax', 'decay_type'), ('LightSpotMax', 'decay_start'),
+                          ('LightSpotMax', 'near_attenuation'),
+                          ('LightSpotMax', 'near_attenuation_start'), ('LightSpotMax', 'near_attenuation_end'),
+                          ('LightSpotMax', 'far_attenuation'),
+                          ('LightSpotMax', 'far_attenuation_start'), ('LightSpotMax', 'far_attenuation_end'),
+                          ('LightSpotMax', 'fallsize'), ('LightSpotMax', 'hotspot'), ('LightSpotMax', 'shape_type'),
+                          ('LightSpotMax', 'rect_aspect'),
+                          ('LightSpotMax', 'overshoot'),
+                          ('LightDirectMax', 'decay_type'), ('LightDirectMax', 'decay_start'),
+                          ('LightDirectMax', 'near_attenuation'),
+                          ('LightDirectMax', 'near_attenuation_start'), ('LightDirectMax', 'near_attenuation_end'),
+                          ('LightDirectMax', 'far_attenuation'),
+                          ('LightDirectMax', 'far_attenuation_start'), ('LightDirectMax', 'far_attenuation_end'),
+                          ('LightDirectMax', 'fallsize'), ('LightDirectMax', 'hotspot'),
+                          ('LightDirectMax', 'shape_type'),
+                          ('LightDirectMax', 'rect_aspect'),
+                          ('LightDirectMax', 'overshoot'),
+                          ('LightOmniMax', 'decay_type'), ('LightOmniMax', 'decay_start'),
+                          ('LightOmniMax', 'near_attenuation'),
+                          ('LightOmniMax', 'near_attenuation_start'), ('LightOmniMax', 'near_attenuation_end'),
+                          ('LightOmniMax', 'far_attenuation'),
+                          ('LightOmniMax', 'far_attenuation_start'), ('LightOmniMax', 'far_attenuation_end'),
                           ('RenderChannelBumpNormals', 'enableDeepOutput'),
                           ('RenderChannelDenoiser', 'enableDeepOutput'),
                           ('RenderChannelDRBucket', 'enableDeepOutput'), ('RenderChannelExtraTex', 'enableDeepOutput'),
@@ -274,6 +323,10 @@ class import_scene_from_clipboard():
 
                 if (type, parm_name) in self.metric_parms:
                     result /= 100
+
+                if (type, parm_name) in self.deg_to_rad_parms:
+                    import math
+                    result /= math.radians(result)
 
         except:
             if not '@' in str(parm_val) and not 'bitmapBuffer' in str(parm_val):
@@ -636,13 +689,23 @@ class import_scene_from_clipboard():
 
         for l in lights:
 
-            # particular case for 'Max' types, need conversion
-            '''if l['Type'] == 'LightOmniMax':
-                l['Type'] = 'LightOmni'''
+            # particular case for suffixed 'Max' types, need conversion
+            if l['Type'] == 'LightOmniMax':
+                l['Type'] = 'LightOmni'
+            elif l['Type'] == 'LightAmbientMax':
+                l['Type'] = 'LightAmbient'
+            elif l['Type'] == 'LightIESMax':
+                l['Type'] = 'LightIES'
+            elif l['Type'] == 'LightSpotMax':
+                l['Type'] = 'LightSpot'
+            elif l['Type'] == 'LightDirectMax':
+                l['Type'] = 'LightDirect'
 
             print l['Name'] + ' ( ' + l['Type'] + ' ) \n'
 
-            light = self.try_create_node(obj, 'VRayNode' + l['Type'], l['Name'], message_stack)
+            name = l['Name'].split('@', 1)[0]
+
+            light = self.try_create_node(obj, 'VRayNode' + l['Type'], name, message_stack)
 
             if light != None:
                 light.setColor(hou.Color(1, 0.898039, 0))
@@ -1629,7 +1692,7 @@ class import_scene_from_clipboard():
                 str_now = str(now.year) + '_' + str(now.month) + '_' + str(now.day) + '_' + str(now.hour) + '_' + str(
                     now.minute)
 
-                log_filename = hip_dir + 'scene_import_' + str_now + '.log'
+                log_filename = hip_dir + '/scene_import_' + str_now + '.log'
                 log_file = open(log_filename, 'w')
 
                 old_stdout = sys.stdout
