@@ -1606,7 +1606,7 @@ class import_scene_from_clipboard():
 
                 if hip_dir != '':
                     if hip_dir.endswith('/'):
-                        hip_dir =hip_dir[:-1]# remove last '/'
+                        hip_dir = hip_dir[:-1]  # remove last '/'
 
                     # self.set_environment_variable('JOB', hip_dir)
                     self.set_environment_variable('HIP', hip_dir)
