@@ -408,12 +408,13 @@ class import_scene_from_clipboard():
 
                 if s['Type'] == 'CustomSettings':
                     if parm_name == 'name':
-                        hip_dir = hou.getenv('HIP')
-                        hou.hipFile.setName(parm_val)
-                        # self.set_environment_variable('JOB', hip_dir)
-                        self.set_environment_variable('HIP', hip_dir)
-                        self.set_environment_variable('HIPFILE', hip_dir + '/' + parm_val + '.hip')
-                        self.set_environment_variable('HIPNAME', parm_val)
+                        if parm_val != '':
+                            hip_dir = hou.getenv('HIP')
+                            hou.hipFile.setName(parm_val)
+                            # self.set_environment_variable('JOB', hip_dir)
+                            self.set_environment_variable('HIP', hip_dir)
+                            self.set_environment_variable('HIPFILE', hip_dir + '/' + parm_val + '.hip')
+                            self.set_environment_variable('HIPNAME', parm_val)
 
                     elif parm_name == 'camera':
                         cam = None
@@ -716,10 +717,18 @@ class import_scene_from_clipboard():
                             result = hou.Matrix4(parm_val[0]).explode(transform_order='trs', rotate_order='xyz',
                                                                       pivot=hou.Vector3(0.5, 0.5, 0))  # TEST
 
-                            self.try_set_parm(light, 't', parm_val[1] * 0.01, message_stack)
-                            self.try_set_parm(light, 'r', result['rotate'], message_stack)
+                            t = parm_val[1] * 0.01
+                            t = hou.Vector3([t[0], t[2], -t[1]])
+
+                            r = result['rotate']
+                            r = hou.Vector3([r[0] - 90, r[2], r[1]])
+
+                            p = result['shear']
+
+                            self.try_set_parm(light, 't', t, message_stack)
+                            self.try_set_parm(light, 'r', r, message_stack)
                             # self.try_set_parm(light, 's', result['scale'], message_stack)
-                            self.try_set_parm(light, 'p', result['shear'], message_stack)
+                            self.try_set_parm(light, 'p', p, message_stack)
                         except:
                             message_stack.append('Cannot extract matrix4 transforms...')
 
