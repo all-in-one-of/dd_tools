@@ -39,7 +39,7 @@ class import_scene_from_clipboard():
 
     # ('SettingsColorMapping', 'exposure'),
     black_listed_parms = (('TexFalloff', 'use_blend_input'), ('RenderChannelMultiMatte', 'enableDeepOutput'),
-                          ('SunLight', 'blend_angle'), ('SunLight', 'horizon_offset'),
+                          ('SunLight', 'blend_angle'), ('SunLight', 'horizon_offset'), ('SunLight', 'target_transform'),
                           ('LightAmbientMax', 'mode'), ('LightAmbientMax', 'gi_min_distance'),
                           ('LightAmbientMax', 'color'),
                           ('LightAmbientMax', 'compensate_exposure'),
@@ -57,8 +57,7 @@ class import_scene_from_clipboard():
                           ('LightDirectMax', 'far_attenuation'),
                           ('LightDirectMax', 'far_attenuation_start'), ('LightDirectMax', 'far_attenuation_end'),
                           ('LightDirectMax', 'fallsize'), ('LightDirectMax', 'hotspot'),
-                          ('LightDirectMax', 'shape_type'),
-                          ('LightDirectMax', 'rect_aspect'),
+                          ('LightDirectMax', 'shape_type'), ('LightDirectMax', 'rect_aspect'),
                           ('LightDirectMax', 'overshoot'),
                           ('LightOmniMax', 'decay_type'), ('LightOmniMax', 'decay_start'),
                           ('LightOmniMax', 'near_attenuation'),
@@ -83,14 +82,12 @@ class import_scene_from_clipboard():
                           ('SettingsRTEngine', 'interactive'), ('SettingsRTEngine', 'enable_cpu_interop'),
                           ('SettingsUnitsInfo', 'meters_scale'),
                           ('SettingsUnitsInfo', 'photometric_scale'), ('SettingsUnitsInfo', 'scene_upDir'),
-                          ('SettingsUnitsInfo', 'seconds_scale'),
-                          ('SettingsUnitsInfo', 'frames_scale'),
+                          ('SettingsUnitsInfo', 'seconds_scale'), ('SettingsUnitsInfo', 'frames_scale'),
                           ('SettingsUnitsInfo', 'rgb_color_space'),
                           ('SettingsImageSampler', 'progressive_effectsUpdate'),
                           ('SettingsImageSampler', 'render_mask_clear'), ('SettingsLightCache', 'premultiplied'),
                           ('SettingsIrradianceMap', 'detail_enhancement'), ('SettingsPhotonMap', 'bounces'),
-                          ('SettingsPhotonMap', 'file'),
-                          ('SettingsPhotonMap', 'max_photons'),
+                          ('SettingsPhotonMap', 'file'), ('SettingsPhotonMap', 'max_photons'),
                           ('SettingsPhotonMap', 'prefilter'), ('SettingsPhotonMap', 'prefilter_samples'),
                           ('SettingsPhotonMap', 'mode'),
                           ('SettingsPhotonMap', 'auto_search_distance'), ('SettingsPhotonMap', 'search_distance'),
@@ -103,16 +100,13 @@ class import_scene_from_clipboard():
                           ('SettingsPhotonMap', 'show_calc_phase'), ('SettingsDMCSampler', 'path_sampler_type'),
                           ('SettingsVFB', 'bloom_on'),
                           ('SettingsVFB', 'bloom_fill_edges'), ('SettingsVFB', 'bloom_weight'),
-                          ('SettingsVFB', 'bloom_size'),
-                          ('SettingsVFB', 'bloom_shape'),
+                          ('SettingsVFB', 'bloom_size'), ('SettingsVFB', 'bloom_shape'),
                           ('SettingsVFB', 'bloom_mode'), ('SettingsVFB', 'bloom_mask_intensity_on'),
-                          ('SettingsVFB', 'bloom_mask_intensity'),
-                          ('SettingsVFB', 'bloom_mask_objid_on'), ('SettingsVFB', 'bloom_mask_objid'),
-                          ('SettingsVFB', 'bloom_mask_mtlid_on'),
+                          ('SettingsVFB', 'bloom_mask_intensity'), ('SettingsVFB', 'bloom_mask_objid_on'),
+                          ('SettingsVFB', 'bloom_mask_objid'), ('SettingsVFB', 'bloom_mask_mtlid_on'),
                           ('SettingsVFB', 'bloom_mask_mtlid'), ('SettingsVFB', 'glare_on'),
-                          ('SettingsVFB', 'glare_fill_edges'),
-                          ('SettingsVFB', 'glare_weight'), ('SettingsVFB', 'glare_size'), ('SettingsVFB', 'glare_type'),
-                          ('SettingsVFB', 'glare_mode'),
+                          ('SettingsVFB', 'glare_fill_edges'), ('SettingsVFB', 'glare_weight'),
+                          ('SettingsVFB', 'glare_size'), ('SettingsVFB', 'glare_type'), ('SettingsVFB', 'glare_mode'),
                           ('SettingsVFB', 'glare_image_path'), ('SettingsVFB', 'glare_obstacle_image_path'),
                           ('SettingsVFB', 'glare_diffraction_on'),
                           ('SettingsVFB', 'glare_use_obstacle_image'), ('SettingsVFB', 'glare_cam_blades_on'),
@@ -715,8 +709,20 @@ class import_scene_from_clipboard():
                     parm_name = p['Name']
                     parm_val = self.try_parse_parm_value(l['Name'], l['Type'], parm_name, p['Value'], message_stack)
 
-                    if parm_name == 'target':
-                        self.try_find_or_create_target_object(obj, light, parm_val, target_objects, message_stack)
+                    # if parm_name == 'target':
+                    #    self.try_find_or_create_target_object(obj, light, parm_val, target_objects, message_stack)
+                    if parm_name == 'transform':
+                        try:
+                            result = hou.Matrix4(parm_val[0]).explode(transform_order='trs', rotate_order='xyz',
+                                                                      pivot=hou.Vector3(0.5, 0.5, 0))  # TEST
+
+                            self.try_set_parm(light, 't', parm_val[1] * 0.01, message_stack)
+                            self.try_set_parm(light, 'r', result['rotate'], message_stack)
+                            # self.try_set_parm(light, 's', result['scale'], message_stack)
+                            self.try_set_parm(light, 'p', result['shear'], message_stack)
+                        except:
+                            message_stack.append('Cannot extract matrix4 transforms...')
+
                     else:
                         print parm_name + " = " + str(parm_val)
                         self.try_set_parm(light, parm_name, parm_val, message_stack)
