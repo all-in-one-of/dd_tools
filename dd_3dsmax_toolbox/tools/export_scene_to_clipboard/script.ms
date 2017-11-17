@@ -1649,7 +1649,7 @@ fn exportScene = (
                 )
             )
 
-            vrayExportRTScene ( _filename + ".vrscene" ) exportCompressed:true exportHEXFormatMesh:true exportHEXFormatTransf:false separateFiles:true exportView:false exportLights:true exportGeometry:true exportNodes:true exportMaterials:true exportTextures:true exportBitmaps:true prefix:"" stripPaths:false
+            vrayExportRTScene ( _filename + ".vrscene" ) exportCompressed:false exportHEXFormatMesh:false exportHEXFormatTransf:false separateFiles:true exportView:false exportLights:true exportGeometry:true exportNodes:true exportMaterials:true exportTextures:true exportBitmaps:true prefix:"" stripPaths:false
             for _o in geometry do (
                 for i = _o.modifiers.count to 1 by -1 do (
                     _m = _o.modifiers[i]
