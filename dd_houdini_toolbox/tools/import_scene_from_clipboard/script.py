@@ -683,6 +683,7 @@ class import_scene_from_clipboard():
         print '#############################################\n\n'
 
         for l in lights:
+            print l['Name'] + ' ( ' + l['Type'] + ' ) \n'
 
             # particular case for suffixed 'Max' types, need conversion
             if l['Type'] == 'LightOmniMax':
@@ -696,8 +697,6 @@ class import_scene_from_clipboard():
             elif l['Type'] == 'LightDirectMax':
                 l['Type'] = 'LightDirect'
 
-            print l['Name'] + ' ( ' + l['Type'] + ' ) \n'
-
             name = l['Name'].split('@', 1)[0]
 
             light = self.try_create_node(obj, 'VRayNode' + l['Type'], name, message_stack)
@@ -710,6 +709,13 @@ class import_scene_from_clipboard():
                     parm_name = p['Name']
                     parm_val = self.try_parse_parm_value(l['Name'], l['Type'], parm_name, p['Value'], message_stack)
 
+                    if l['Type'] == 'LightRectangle':
+                        if parm_name == 'u_size' or parm_name == 'v_size' :
+                            parm_val *= 2
+                        elif parm_name == 'is_disc':
+                            if parm_val == 1:
+                                self.try_set_parm(light, 'v_size', light.parm('u_size').eval(), message_stack)
+
                     # if parm_name == 'target':
                     #    self.try_find_or_create_target_object(obj, light, parm_val, target_objects, message_stack)
                     if parm_name == 'transform':
@@ -721,7 +727,7 @@ class import_scene_from_clipboard():
                             t = hou.Vector3([t[0], t[2], -t[1]])
 
                             r = result['rotate']
-                            r = hou.Vector3([r[0] - 90, r[2], r[1]])
+                            r = hou.Vector3([r[0] - 90, r[2], -r[1]])
 
                             p = result['shear']
 
