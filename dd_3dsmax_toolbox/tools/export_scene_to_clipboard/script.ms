@@ -1618,10 +1618,10 @@ fn exportCustomSettings = (
 fn getUsedUVChannels _o = (
     _used_channels = #()
     if classOf _o == Editable_Poly or classOf _o == PolyMeshObject then (
-        for i in 1 to polyOp.getNumMaps _o do
+        for i in 0 to polyOp.getNumMaps _o do
             if polyOp.getMapSupport _o i then append _used_channels i
     ) else (
-        for i in 1 to meshOp.getNumMaps _o do
+        for i in 0 to meshOp.getNumMaps _o do
             if meshOp.getMapSupport _o i then append _used_channels i
     )
     _used_channels
