@@ -673,7 +673,7 @@ class import_scene_from_clipboard():
         for m in message_stack:
             print m
 
-    def load_lights(self, lights, target_objects):
+    def load_lights(self, lights, target_objects, plugins):
         # loading settings
         message_stack = list()
         obj = hou.node('/obj')
@@ -710,7 +710,7 @@ class import_scene_from_clipboard():
                     parm_val = self.try_parse_parm_value(l['Name'], l['Type'], parm_name, p['Value'], message_stack)
 
                     if l['Type'] == 'LightRectangle':
-                        if parm_name == 'u_size' or parm_name == 'v_size' :
+                        if parm_name == 'u_size' or parm_name == 'v_size':
                             parm_val *= 2
                         elif parm_name == 'is_disc':
                             if parm_val == 1:
@@ -737,6 +737,24 @@ class import_scene_from_clipboard():
                             self.try_set_parm(light, 'p', p, message_stack)
                         except:
                             message_stack.append('Cannot extract matrix4 transforms...')
+
+
+                    elif parm_name == 'dome_tex':
+                        # load texture map here...
+
+                        parent = light.createNode('matnet', 'displacement')
+                        output_node = None
+                        for nn in plugins:
+                            if nn['Name'] == str(parm_val):
+                                self.add_plugin_node(plugins, parent, output_node, parm_name,
+                                                     self.normalize_name(nn['Name']),
+                                                     nn['Type'], nn['Parms'], message_stack)
+
+                            light.parm('dome_tex').set(
+                                '`chs("displacement/' + self.normalize_name(nn['Name']) + '/file")`')  # TEMP...
+
+                        parent.layoutChildren()
+                        light.layoutChildren()
 
                     else:
                         print parm_name + " = " + str(parm_val)
@@ -971,9 +989,10 @@ class import_scene_from_clipboard():
                                                              nn['Type'], nn['Parms'], message_stack)
 
                                     geo.parm('GeomDisplacedMesh_displacement_texture').set(
-                                        '`chs("displacement/' + self.normalize_name(nn['Name']) + '")`')  # TEMP...
+                                        '`chs("displacement/' + self.normalize_name(nn['Name']) + '/file")`')  # TEMP...
 
                                 parent.layoutChildren()
+                                geo.layoutChildren()
 
                             else:
                                 parm_val = self.try_parse_parm_value(name, n['Type'], parm_name, parm_val,
@@ -1729,7 +1748,7 @@ class import_scene_from_clipboard():
                                                         environments, geometries, target_objects, displacements)
 
                                 self.load_cameras(cameras, target_objects)
-                                self.load_lights(lights, target_objects)
+                                self.load_lights(lights, target_objects, plugins)
                                 self.load_nodes(nodes, geometries, materials, displacements, plugins)
                                 self.load_materials(plugins, materials)
                                 self.load_environments(plugins, environments)
