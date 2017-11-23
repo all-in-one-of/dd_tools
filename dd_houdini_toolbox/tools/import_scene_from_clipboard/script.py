@@ -756,6 +756,9 @@ class import_scene_from_clipboard():
                         parent.layoutChildren()
                         light.layoutChildren()
 
+                    elif parm_name == 'geometry':
+                        self.try_set_parm(light, parm_name, '/obj/' + str(parm_val), message_stack)
+
                     else:
                         print parm_name + " = " + str(parm_val)
                         self.try_set_parm(light, parm_name, parm_val, message_stack)
@@ -934,8 +937,8 @@ class import_scene_from_clipboard():
 
         for n in nodes:
             name = n['Name'].split('@', 1)[0]
-            material = n['Parms'][[i for i, s in enumerate(n['Parms']) if 'material' in s['Name']][0]]['Value']
 
+            material = n['Parms'][[i for i, s in enumerate(n['Parms']) if 'material' in s['Name']][0]]['Value']
             material_name = self.normalize_name(material.split('@', 1)[0])
             materials.append({'Name': material_name, 'Codename': material})
 
@@ -954,121 +957,148 @@ class import_scene_from_clipboard():
                     geometry = g
                     break
 
+            # is light mesh ?
+            is_mesh_light = '__mesh__' in name
+
+            if is_mesh_light:
+                # retrieve vrscene mesh codename...
+                name = n['Parms'][[i for i, s in enumerate(n['Parms']) if 'geometry' in s['Name']][0]]['Value']
+            else:
+                name = self.normalize_name(name)
+
             # if geometry exists getting parameters...
             if geometry != None:
-                geo = self.try_create_node(obj, 'geo', self.normalize_name(name), message_stack)
+                geo = self.try_create_node(obj, 'geo', name, message_stack)
 
                 if geo != None:
                     for child in geo.children():
                         child.destroy()
 
-                    self.add_vray_objectid_param_template(geo)
-                    geo.parm('shop_materialpath').set('/shop/' + material_name)
+                    # retrieving geometry parameters
+                    from_filename = ''
+                    object_id = 0
+                    wirecolor = (0.5, 0.5, 0.5)
+                    handle = 0
+                    for p in geometry['Parms']:
+                        parm_name = p['Name']
+                        parm_val = p['Value']
 
-                    if displacement != None:
-                        # displacement_tex_color
-                        # displacement_amount
-                        import vfh.shelftools.vrayattr as vrayattr
-                        HOUDINI_SOHO_DEVELOPER = os.environ.get("HOUDINI_SOHO_DEVELOPER", False)
-                        if HOUDINI_SOHO_DEVELOPER:
-                            reload(vrayattr)
-                        vrayattr.addVRayDisplamentParams(geo)
-                        for p in displacement['Parms']:
-                            parm_name = p['Name']
-                            parm_val = p['Value']
+                        if parm_name == 'filename':
+                            from_filename = self.try_parse_parm_value(name, n['Type'], parm_name, parm_val,
+                                                                      message_stack)
+                        elif parm_name == 'object_id':
+                            object_id = self.try_parse_parm_value(name, n['Type'], parm_name, parm_val,
+                                                                  message_stack)
+                        elif parm_name == 'wirecolor':
+                            wirecolor = self.try_parse_parm_value(name, n['Type'], parm_name, parm_val,
+                                                                  message_stack)
+                        elif parm_name == 'handle':
+                            handle = self.try_parse_parm_value(name, n['Type'], parm_name, parm_val, message_stack)
 
-                            if parm_name == 'displacement_tex_color':
-                                # load texture map here...
+                        else:
+                            # transform values
+                            parm_val = self.try_parse_parm_value(name, n['Type'], parm_name, parm_val,
+                                                                 message_stack)
+                            self.try_set_parm(geo, parm_name, parm_val, message_stack)
 
-                                parent = geo.createNode('matnet', 'displacement')
-                                output_node = None
-                                for nn in plugins:
-                                    if nn['Name'] == str(parm_val):
-                                        self.add_plugin_node(plugins, parent, output_node, parm_name,
-                                                             self.normalize_name(nn['Name']),
-                                                             nn['Type'], nn['Parms'], message_stack)
+                    # copy cache file from temp location to .hip/geo dir
+                    if os.path.isfile(from_filename):
+                        to_filename = geo_dir + basename(from_filename)  # + ".abc"
+                        try:
+                            # shutil.move(from_filename, to_filename)
+                            shutil.copy(from_filename, to_filename)
+                        except IOError:
+                            os.chmod(to_filename, 777)  # ?? still can raise exception
+                            shutil.move(from_filename, to_filename)
+                            message_stack.append('Cannot copy .abc file...')
 
-                                    geo.parm('GeomDisplacedMesh_displacement_texture').set(
-                                        '`chs("displacement/' + self.normalize_name(nn['Name']) + '/file")`')  # TEMP...
+                    alembic = geo.node('alembic1')
+                    if alembic == None:
+                        alembic = geo.createNode('alembic')
+                    alembic.parm('fileName').set('$HIP/geo/' + basename(from_filename))  # + ".abc")
+                    alembic.parm('reload').pressButton()
 
-                                parent.layoutChildren()
-                                geo.layoutChildren()
+                    xform = geo.node('xform1')
+                    if xform == None:
+                        xform = alembic.createOutputNode('xform')
+                    xform.parm('scale').set(0.01)
 
-                            else:
-                                parm_val = self.try_parse_parm_value(name, n['Type'], parm_name, parm_val,
-                                                                     message_stack)
-                                self.try_set_parm(geo, 'GeomDisplacedMesh_' + parm_name, parm_val, message_stack)
+                    if is_mesh_light:
+                        alembic.parm('loadmode').set(1)
+                        xform.parm('rx').set(90)
+                        convert = xform.createOutputNode('convert')
+                        convert.setDisplayFlag(True)
+                        convert.setRenderFlag(True)
 
-                # retrieving geometry parameters
-                from_filename = ''
-                object_id = 0
-                wirecolor = (0.5, 0.5, 0.5)
-                handle = 0
-                for p in geometry['Parms']:
-                    parm_name = p['Name']
-                    parm_val = p['Value']
+                        geo.setDisplayFlag(False)
+                        geo.setColor(hou.Color(0.306, 0.306, 0.306))
+                        geo.setUserData('nodeshape', 'tabbed_left')
 
-                    if parm_name == 'filename':
-                        from_filename = self.try_parse_parm_value(name, n['Type'], parm_name, parm_val, message_stack)
-                    elif parm_name == 'object_id':
-                        object_id = self.try_parse_parm_value(name, n['Type'], parm_name, parm_val, message_stack)
-                    elif parm_name == 'wirecolor':
-                        wirecolor = self.try_parse_parm_value(name, n['Type'], parm_name, parm_val, message_stack)
-                    elif parm_name == 'handle':
-                        handle = self.try_parse_parm_value(name, n['Type'], parm_name, parm_val, message_stack)
                     else:
-                        # transform values
-                        parm_val = self.try_parse_parm_value(name, n['Type'], parm_name, parm_val, message_stack)
-                        self.try_set_parm(geo, parm_name, parm_val, message_stack)
+                        self.add_vray_objectid_param_template(geo)
+                        geo.parm('shop_materialpath').set('/shop/' + material_name)
 
-                # copy cache file from temp location to .hip/geo dir
-                if os.path.isfile(from_filename):
-                    to_filename = geo_dir + basename(from_filename)  # + ".abc"
-                    try:
-                        # shutil.move(from_filename, to_filename)
-                        shutil.copy(from_filename, to_filename)
-                    except IOError:
-                        os.chmod(to_filename, 777)  # ?? still can raise exception
-                        shutil.move(from_filename, to_filename)
-                        message_stack.append('Cannot copy .abc file...')
+                        if displacement != None:
+                            # displacement_tex_color
+                            # displacement_amount
+                            import vfh.shelftools.vrayattr as vrayattr
+                            HOUDINI_SOHO_DEVELOPER = os.environ.get("HOUDINI_SOHO_DEVELOPER", False)
+                            if HOUDINI_SOHO_DEVELOPER:
+                                reload(vrayattr)
+                            vrayattr.addVRayDisplamentParams(geo)
+                            for p in displacement['Parms']:
+                                parm_name = p['Name']
+                                parm_val = p['Value']
 
-                geo.parm('vray_objectID').set(object_id)
-                geo.parm('use_dcolor').set(True)
-                geo.parm('dcolorr').set(wirecolor[0])
-                geo.parm('dcolorg').set(wirecolor[1])
-                geo.parm('dcolorb').set(wirecolor[2])
+                                if parm_name == 'displacement_tex_color':
+                                    # load texture map here...
 
-                alembic = geo.node('alembic1')
-                if alembic == None:
-                    alembic = geo.createNode('alembic')
-                alembic.parm('fileName').set('$HIP/geo/' + basename(from_filename))  # + ".abc")
-                alembic.parm('reload').pressButton()
+                                    parent = geo.createNode('matnet', 'displacement')
+                                    output_node = None
+                                    for nn in plugins:
+                                        if nn['Name'] == str(parm_val):
+                                            self.add_plugin_node(plugins, parent, output_node, parm_name,
+                                                                 self.normalize_name(nn['Name']),
+                                                                 nn['Type'], nn['Parms'], message_stack)
 
-                xform = geo.node('xform1')
-                if xform == None:
-                    xform = alembic.createOutputNode('xform', 'xform1')
-                xform.parm('scale').set(0.01)
+                                        geo.parm('GeomDisplacedMesh_displacement_texture').set(
+                                            '`chs("displacement/' + self.normalize_name(
+                                                nn['Name']) + '/file")`')  # TEMP...
 
-                properties = geo.node('properties')
-                if properties == None:
-                    properties = xform.createOutputNode('attribwrangle', 'properties')
-                    properties.parm('class').set(0)
-                    properties.setDisplayFlag(True)
+                                    parent.layoutChildren()
+                                    geo.layoutChildren()
 
-                properties.parm('snippet').set(
-                    'v@wirecolor = set(' + str(wirecolor[0]) + ', ' + str(wirecolor[1]) + ', ' + str(
-                        wirecolor[2]) + ');\ni@handle = ' + str(handle) + ';')
+                                else:
+                                    parm_val = self.try_parse_parm_value(name, n['Type'], parm_name, parm_val,
+                                                                         message_stack)
+                                    self.try_set_parm(geo, 'GeomDisplacedMesh_' + parm_name, parm_val, message_stack)
 
-                vraypoxy = geo.node('vrayproxy1')
-                if vraypoxy == None:
-                    vraypoxy = geo.createNode('VRayNodeVRayProxy', 'vrayproxy1')
-                    vraypoxy.moveToGoodPosition()
+                        geo.parm('vray_objectID').set(object_id)
+                        geo.parm('use_dcolor').set(True)
+                        geo.parm('dcolorr').set(wirecolor[0])
+                        geo.parm('dcolorg').set(wirecolor[1])
+                        geo.parm('dcolorb').set(wirecolor[2])
 
-                vraypoxy.parm('file').setExpression('chs("../alembic1/fileName")')
-                vraypoxy.parm('reload').pressButton()
-                vraypoxy.parm('scale').setExpression('ch("../xform1/scale")')
-                vraypoxy.parm('first_map_channel').set(1)
-                vraypoxy.setRenderFlag(True)
+                        properties = geo.node('properties')
+                        if properties == None:
+                            properties = xform.createOutputNode('attribwrangle', 'properties')
+                            properties.parm('class').set(0)
+                            properties.setDisplayFlag(True)
+
+                        properties.parm('snippet').set(
+                            'v@wirecolor = set(' + str(wirecolor[0]) + ', ' + str(wirecolor[1]) + ', ' + str(
+                                wirecolor[2]) + ');\ni@handle = ' + str(handle) + ';')
+
+                        vraypoxy = geo.node('vrayproxy1')
+                        if vraypoxy == None:
+                            vraypoxy = geo.createNode('VRayNodeVRayProxy', 'vrayproxy1')
+                            vraypoxy.moveToGoodPosition()
+
+                        vraypoxy.parm('file').setExpression('chs("../alembic1/fileName")')
+                        vraypoxy.parm('reload').pressButton()
+                        vraypoxy.parm('scale').setExpression('ch("../xform1/scale")')
+                        vraypoxy.parm('first_map_channel').set(1)
+                        vraypoxy.setRenderFlag(True)
 
                 geo.layoutChildren()
 

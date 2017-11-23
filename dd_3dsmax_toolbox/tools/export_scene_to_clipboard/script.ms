@@ -149,6 +149,37 @@ fn getValidGeometries = (
     _filteredOjects
 )
 
+fn extract_light_mesh _o = (
+	_result = undefined
+	if classOf _o == VRayLight do
+	if _o.type == 3 do (
+		if _o.mesh_source == undefined then (
+			_lightMesh = _o.Shape_mesh
+			_result = editable_mesh name:(_o.name + "___mesh___")
+			try (
+				_result.baseObject = _lightMesh[_lightMesh.numSubs]
+			)catch(
+				_result.baseObject = _lightMesh[_lightMesh.numSubs][_lightMesh[_lightMesh.numSubs].numSubs]
+			)
+			if _lightMesh.numSubs > 1 do
+				for i = _lightMesh.numSubs-1 to 1 by -1 do
+					addmodifier _result (_lightMesh[i])
+			_o.mesh_source = _result
+		)else (
+			_result = instance _o.mesh_source
+		)
+	)
+	_result.name = _o.name + "___mesh___"
+	_result
+)
+
+fn delete_light_mesh _o = (
+    _mesh = _o.mesh_source
+	for i = _mesh.modifiers.count to 1 by -1 do deleteModifier _mesh _mesh.modifiers[i]
+	InstanceMgr.MakeModifiersUnique #(_mesh) (for i = _o.Shape_mesh.numSubs-1 to 1 by -1 collect _o.Shape_mesh[i]) #individual
+	delete _mesh
+)
+
 fn exportGeometries _dir _step:1 _substeps:1 = (
     _str = ""
     _validGeometries = getValidGeometries()
@@ -1636,6 +1667,9 @@ fn exportScene = (
 
     _script = "#scene_export\n\n"
 
+    _vrlightsmeshs = for _o in getClassInstances VRayLight where _o.type == 3 collect (refs.dependentNodes _o)[1]
+    for _o in _vrlightsmeshs do extract_light_mesh _o
+
     try(
         enabledVRActiveShade = ((renderers.activeShade.classid[1] == 1770671000) and (renderers.activeShade.classid[2] == 1323107829))
 		if (not enabledVRActiveShade) do renderers.activeShade=VRayRT()
@@ -1672,6 +1706,8 @@ fn exportScene = (
     writeToFile ( _filename + "_geometries.vrscene" ) (exportGeometries _dir)
     writeToFile ( _filename + "_cameras.vrscene" ) (exportCameras())
     --writeToFile ( _filename + "_lights.vrscene" ) (exportLights())
+
+    for _o in _vrlightsmeshs do delete_light_mesh _o
 
     _script += "filename," + _filename + ".vrscene" + "\n"
 
