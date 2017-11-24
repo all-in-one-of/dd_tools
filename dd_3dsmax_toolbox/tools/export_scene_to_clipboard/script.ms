@@ -1,4 +1,4 @@
-fn filter_kernel_convert _val = case classOf _val of (Area : 1;VRayBoxFilter : 2;Catmull_Rom : 3;Cook_Variable : 4;Soften : 5;VRayLanczosFilter : 6;Mitchell_Netravali : 7;VRayMitNetFilter : 7;VRaySincFilter : 8;VRayTriangleFilter : 9;default : 6)
+fn filterKernelConvert _val = case classOf _val of (Area : 1;VRayBoxFilter : 2;Catmull_Rom : 3;Cook_Variable : 4;Soften : 5;VRayLanczosFilter : 6;Mitchell_Netravali : 7;VRayMitNetFilter : 7;VRaySincFilter : 8;VRayTriangleFilter : 9;default : 6)
 
 fn appendLineToFile _f _str _var = (
 
@@ -136,6 +136,17 @@ fn formatUnits _value = (
     ( _value / 100.0 ) as string
 )
 
+fn getLayerHierarchy _o = (
+	_result = _o.layer.name
+	_layer = LayerManager.getLayerFromName _o.layer.name
+	while _layer != undefined do (
+		_layer = _layer.getParent()
+		if _layer != undefined do
+			_result = _layer.name	+ "/" + _result
+	)
+	_result
+)
+
 fn getValidGeometries = (
     _prefilteredObjects = for _o in geometry where _o.isHidden == false and _o.renderable == true collect _o
     _instanceslist = #()
@@ -149,7 +160,7 @@ fn getValidGeometries = (
     _filteredOjects
 )
 
-fn extract_light_mesh _o = (
+fn extractLightMesh _o = (
 	_result = undefined
 	if classOf _o == VRayLight do
 	if _o.type == 3 do (
@@ -165,6 +176,7 @@ fn extract_light_mesh _o = (
 				for i = _lightMesh.numSubs-1 to 1 by -1 do
 					addmodifier _result (_lightMesh[i])
 			_o.mesh_source = _result
+
 		)else (
 			_result = instance _o.mesh_source
 		)
@@ -173,11 +185,11 @@ fn extract_light_mesh _o = (
 	_result
 )
 
-fn delete_light_mesh _o = (
+fn deleteLightMesh _o = (
     _mesh = _o.mesh_source
-	for i = _mesh.modifiers.count to 1 by -1 do deleteModifier _mesh _mesh.modifiers[i]
-	InstanceMgr.MakeModifiersUnique #(_mesh) (for i = _o.Shape_mesh.numSubs-1 to 1 by -1 collect _o.Shape_mesh[i]) #individual
-	delete _mesh
+    for i = _mesh.modifiers.count to 1 by -1 do deleteModifier _mesh _mesh.modifiers[i]
+    InstanceMgr.MakeModifiersUnique #(_mesh) (for i = _o.Shape_mesh.numSubs-1 to 1 by -1 collect _o.Shape_mesh[i]) #individual
+    delete _mesh
 )
 
 fn exportGeometries _dir _step:1 _substeps:1 = (
@@ -1635,7 +1647,7 @@ fn exportCustomSettings = (
     )catch()
     /*
     try(
-        _aa_filter = if renderers.current.filter_on == false then 0 else filter_kernel_convert renderers.current.filter_kernel as string
+        _aa_filter = if renderers.current.filter_on == false then 0 else filterKernelConvert renderers.current.filter_kernel as string
         _str += "\nSettingsImageSampler aa_filter {\n  filter_type=" + _aa_filter + ";\n}\n"
     )catch()
     */
@@ -1668,7 +1680,12 @@ fn exportScene = (
     _script = "#scene_export\n\n"
 
     _vrlightsmeshs = for _o in getClassInstances VRayLight where _o.type == 3 collect (refs.dependentNodes _o)[1]
-    for _o in _vrlightsmeshs do extract_light_mesh _o
+
+    try(
+        suspendEditing()
+        for _o in _vrlightsmeshs do extractLightMesh _o
+        resumeEditing()
+    )catch(resumeEditing();print "error while creating temporary light mesh objects")
 
     try(
         enabledVRActiveShade = ((renderers.activeShade.classid[1] == 1770671000) and (renderers.activeShade.classid[2] == 1323107829))
@@ -1707,7 +1724,11 @@ fn exportScene = (
     writeToFile ( _filename + "_cameras.vrscene" ) (exportCameras())
     --writeToFile ( _filename + "_lights.vrscene" ) (exportLights())
 
-    for _o in _vrlightsmeshs do delete_light_mesh _o
+    try(
+        suspendEditing()
+        for _o in _vrlightsmeshs do deleteLightMesh _o
+        resumeEditing()
+    )catch(resumeEditing();print "error while deleting temporary light mesh objects")
 
     _script += "filename," + _filename + ".vrscene" + "\n"
 
