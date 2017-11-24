@@ -136,13 +136,12 @@ fn formatUnits _value = (
     ( _value / 100.0 ) as string
 )
 
-fn getLayerHierarchy _o = (
-	_result = _o.layer.name
-	_layer = LayerManager.getLayerFromName _o.layer.name
+fn getLayerHierarchy _layer = (
+	_result = normalizeName(_layer.name)
 	while _layer != undefined do (
 		_layer = _layer.getParent()
 		if _layer != undefined do
-			_result = _layer.name	+ "/" + _result
+			_result = normalizeName(_layer.name)	+ "/" + _result
 	)
 	_result
 )
@@ -1635,6 +1634,18 @@ fn exportLights _step:1 _substeps:1 = (
     _str
 )
 
+fn formatArray _array = (
+	_result = ""
+	if _array.count > 0 do (
+		_result = _array[1] as string
+		if _array.count > 1 do (
+			for i = 2 to _array.count do
+				_result += "," + _array[i] as string
+		)
+	)
+	_result
+)
+
 fn exportCustomSettings = (
     _str = ""
     try(
@@ -1655,6 +1666,17 @@ fn exportCustomSettings = (
         _focus_from_camera = formatBoolean renderers.current.dof_getFromCamera
         _str += "\nSettingsCameraDof settingsCameraDOF {\n  focus_from_camera=" + _focus_from_camera + ";\n}\n"
     )catch()
+
+    try(
+        for i = 0 to (LayerManager.count-1) do (
+            _layer = ILayerManager.getLayerObject i
+            _str += "\nSceneLayer " + normalizeName(_layer.name) + " {\n"
+            _str += "  hierarchy=" + getLayerHierarchy _layer + ";\n"
+            _str += "  nodes=" + formatArray( for o in (refs.dependentNodes _layer) collect o.name ) + ";\n"
+            --_str += "  color=" + formatColor _layer.wirecolor + ";\n"
+            _str += "}\n"
+        )
+    )catch()
     _str
 )
 
@@ -1668,6 +1690,11 @@ fn getUsedUVChannels _o = (
             if meshOp.getMapSupport _o i then append _used_channels i
     )
     _used_channels
+)
+
+fn exportLayers = (
+    _str = ""
+
 )
 
 fn exportScene = (

@@ -1811,3 +1811,10 @@ class import_scene_from_clipboard():
 
 with hou.undos.group("Import Scene From Clipboard"):
     import_scene_from_clipboard().run()
+
+
+# toto = hou.item("/obj").createNetworkBox()
+# toto.setName('toto')
+# toto.setComment('toto')
+# toto.setColor(hou.Color(0.306, 0.306, 306))
+
