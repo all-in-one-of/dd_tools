@@ -128,7 +128,7 @@ class import_scene_from_clipboard():
 
     def parse_vrscene_file(self, fname, plugins, cameras, lights, settings, renderChannels, nodes, environments,
                            geometries,
-                           targetObjects, displacements):
+                           targetObjects, displacements, layers):
 
         import re
         import os
@@ -215,6 +215,10 @@ class import_scene_from_clipboard():
                 # catch displacements
                 elif 'GeomDisplacedMesh' in type:
                     displacements.append({'Type': type, 'Name': name, 'Parms': parms})
+
+                # catch layers
+                elif 'SceneLayer' in type:
+                    layers.append({'Type': type, 'Name': name, 'Parms': parms})
 
                 else:
                     # plugins.append({'Type': 'VRayNode' + type, 'Name': name, 'Parms': parms})
@@ -1685,6 +1689,80 @@ class import_scene_from_clipboard():
         for m in message_stack:
             print m
 
+    def try_create_networkbox(self, parent, name, message_stack):
+        item = None
+        old_item = parent.item(name)
+
+        try:
+            item = parent.createNetworkBox()
+            if old_item != None:
+                item.setPosition(old_item.position())
+            else:
+                item.moveToGoodPosition()
+        except:
+            message_stack.append(
+                'cannot create networkbox name:' + name + ' parent: ' + parent.name())
+
+        if item != None:
+            if old_item != None:
+                old_item.destroy()
+            try:
+                item.setName(name)
+                item.setComment(name)
+            except:
+                message_stack.append('cannot set name/comment:' + name)
+
+        return item
+
+    def try_find_or_create_networkbox(self, parent, name, message_stack):
+        item = parent.item(name)
+
+        if item == None:
+            try:
+                item = parent.createNetworkBox()
+                item.moveToGoodPosition()
+            except:
+                message_stack.append(
+                    'cannot create networkbox name:' + name + ' parent: ' + parent.name())
+
+            if item != None:
+                try:
+                    item.setName(name)
+                    item.setComment(name)
+                except:
+                    message_stack.append('cannot set name/comment:' + name)
+
+        return item
+
+    def load_layers(self, layers):
+        # loading layers
+        message_stack = list()
+        obj = hou.node('/obj')
+
+        print '\n\n\n#############################################'
+        print '###########  LOADING SCENE LAYERS  ##########'
+        print '#############################################\n\n'
+
+        for l in layers:
+            networkbox = self.try_find_or_create_networkbox(obj, self.normalize_name(l['Name']), message_stack)
+            if networkbox != None:
+                for p in l['Parms']:
+                    if p['Name'] == 'hierarchy':
+                        pass
+
+                    elif p['Name'] == 'nodes':
+                        names = p['Value'].split(',')
+                        for n in names:
+                            node = obj.node(n)
+                            if node != None:
+                                networkbox.addNode(node)
+
+                networkbox.fitAroundContents()
+                networkbox.setMinimized(True)
+
+                if len(networkbox.items()) == 0:
+                    networkbox.destroy()
+
     def format_elapsed_time(self, elapsed):
         if elapsed > 60 * 60:
             elapsed /= 60 * 60
@@ -1736,6 +1814,7 @@ class import_scene_from_clipboard():
         geometries = list()
         target_objects = list()
         displacements = list()
+        layers = list()
 
         if lines.count > 1:
             if lines[0] == '#scene_export':
@@ -1775,7 +1854,7 @@ class import_scene_from_clipboard():
                             if ls[0] == 'filename':
                                 self.parse_vrscene_file(ls[1], plugins, cameras, lights, settings, render_channels,
                                                         nodes,
-                                                        environments, geometries, target_objects, displacements)
+                                                        environments, geometries, target_objects, displacements, layers)
 
                                 self.load_cameras(cameras, target_objects)
                                 self.load_lights(lights, target_objects, plugins)
@@ -1784,6 +1863,7 @@ class import_scene_from_clipboard():
                                 self.load_environments(plugins, environments)
                                 self.load_render_channels(plugins, render_channels)
                                 self.load_settings(settings)
+                                self.load_layers(layers)
 
                     obj = hou.node('/obj')
                     self.network_tab.cd(obj.path())  # TEST
@@ -1811,10 +1891,3 @@ class import_scene_from_clipboard():
 
 with hou.undos.group("Import Scene From Clipboard"):
     import_scene_from_clipboard().run()
-
-
-# toto = hou.item("/obj").createNetworkBox()
-# toto.setName('toto')
-# toto.setComment('toto')
-# toto.setColor(hou.Color(0.306, 0.306, 306))
-
