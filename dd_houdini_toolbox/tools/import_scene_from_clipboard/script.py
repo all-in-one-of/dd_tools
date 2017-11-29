@@ -746,7 +746,7 @@ class import_scene_from_clipboard():
                     elif parm_name == 'dome_tex':
                         # load texture map here...
 
-                        parent = light.createNode('matnet', 'displacement')
+                        parent = light.createNode('matnet', 'texture')
                         output_node = None
                         for nn in plugins:
                             if nn['Name'] == str(parm_val):
@@ -755,7 +755,7 @@ class import_scene_from_clipboard():
                                                      nn['Type'], nn['Parms'], message_stack)
 
                             light.parm('dome_tex').set(
-                                '`chs("displacement/' + self.normalize_name(nn['Name']) + '/file")`')  # TEMP...
+                                '`chs("texture/' + self.normalize_name(nn['Name']) + '/file")`')  # TEMP...
 
                         parent.layoutChildren()
                         light.layoutChildren()
@@ -1024,7 +1024,7 @@ class import_scene_from_clipboard():
 
                     xform = geo.node('xform1')
                     if xform == None:
-                        xform = alembic.createOutputNode('xform')
+                        xform = alembic.createOutputNode('xform', 'xform1')
                     xform.parm('scale').set(0.01)
 
                     if is_mesh_light:
@@ -1689,51 +1689,6 @@ class import_scene_from_clipboard():
         for m in message_stack:
             print m
 
-    def try_create_networkbox(self, parent, name, message_stack):
-        item = None
-        old_item = parent.item(name)
-
-        try:
-            item = parent.createNetworkBox()
-            if old_item != None:
-                item.setPosition(old_item.position())
-            else:
-                item.moveToGoodPosition()
-        except:
-            message_stack.append(
-                'cannot create networkbox name:' + name + ' parent: ' + parent.name())
-
-        if item != None:
-            if old_item != None:
-                old_item.destroy()
-            try:
-                item.setName(name)
-                item.setComment(name)
-            except:
-                message_stack.append('cannot set name/comment:' + name)
-
-        return item
-
-    def try_find_or_create_networkbox(self, parent, name, message_stack):
-        item = parent.item(name)
-
-        if item == None:
-            try:
-                item = parent.createNetworkBox()
-                item.moveToGoodPosition()
-            except:
-                message_stack.append(
-                    'cannot create networkbox name:' + name + ' parent: ' + parent.name())
-
-            if item != None:
-                try:
-                    item.setName(name)
-                    item.setComment(name)
-                except:
-                    message_stack.append('cannot set name/comment:' + name)
-
-        return item
-
     def load_layers(self, layers):
         # loading layers
         message_stack = list()
@@ -1743,25 +1698,50 @@ class import_scene_from_clipboard():
         print '###########  LOADING SCENE LAYERS  ##########'
         print '#############################################\n\n'
 
+        # create layers
         for l in layers:
-            networkbox = self.try_find_or_create_networkbox(obj, self.normalize_name(l['Name']), message_stack)
-            if networkbox != None:
+            helper = self.try_find_or_create_node(obj, 'null', self.normalize_name(l['Name']), message_stack)
+            if helper != None:
+                helper.setColor(hou.Color(0.306, 0.306, 0.306))
+                helper.setUserData('nodeshape', 'circle')
+                helper.setGenericFlag(hou.nodeFlag.Display, False)
+                helper.setGenericFlag(hou.nodeFlag.Selectable, False)
+
+        # organize and populate layers
+        for l in layers:
+            layer = obj.node(self.normalize_name(l['Name']))
+            if layer != None:
                 for p in l['Parms']:
-                    if p['Name'] == 'hierarchy':
-                        pass
-
-                    elif p['Name'] == 'nodes':
-                        names = p['Value'].split(',')
+                    # parenting...
+                    if p['Name'] == 'parent':
+                        if str(p["Value"]) != '':
+                            parent = obj.node(self.normalize_name(p["Value"]))
+                            if parent != None:
+                                layer.setInput(0, parent)
+                    # populate...
+                    if p['Name'] == 'nodes':
+                        names = self.try_parse_parm_value(l['Name'], 'SceneLayer', 'nodes', p['Value'], message_stack)
                         for n in names:
-                            node = obj.node(n)
+                            node = obj.node(self.normalize_name(n))
                             if node != None:
-                                networkbox.addNode(node)
+                                node.setInput(0, layer)
 
-                networkbox.fitAroundContents()
-                networkbox.setMinimized(True)
+        # delete empty layers
+        for l in layers:
+            layer = obj.node(self.normalize_name(l['Name']))
+            if layer != None:
+                if len(layer.outputs()) == 0:
+                    layer.destroy()
 
-                if len(networkbox.items()) == 0:
-                    networkbox.destroy()
+        obj.layoutChildren()
+
+        if len(message_stack) != 0:
+            print '\n\n\nLoad Scene layers terminated with: ' + str(len(message_stack)) + ' errors:\n'
+        else:
+            print '\n\n\nLoad Scene layers terminated successfully\n'
+
+        for m in message_stack:
+            print m
 
     def format_elapsed_time(self, elapsed):
         if elapsed > 60 * 60:
@@ -1820,6 +1800,9 @@ class import_scene_from_clipboard():
             if lines[0] == '#scene_export':
 
                 last_hip_dir = hou.getenv('$HIP')
+
+                hou.hipFile.clear()
+
                 hip_dir = hou.ui.selectFile(start_directory=last_hip_dir, title='Select project directory',
                                             file_type=hou.fileType.Directory)
 

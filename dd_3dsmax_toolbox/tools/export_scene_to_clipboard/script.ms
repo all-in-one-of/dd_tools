@@ -136,16 +136,6 @@ fn formatUnits _value = (
     ( _value / 100.0 ) as string
 )
 
-fn getLayerHierarchy _layer = (
-	_result = normalizeName(_layer.name)
-	while _layer != undefined do (
-		_layer = _layer.getParent()
-		if _layer != undefined do
-			_result = normalizeName(_layer.name)	+ "/" + _result
-	)
-	_result
-)
-
 fn getValidGeometries = (
     _prefilteredObjects = for _o in geometry where _o.isHidden == false and _o.renderable == true collect _o
     _instanceslist = #()
@@ -1673,8 +1663,13 @@ fn exportCustomSettings = (
             _lname = normalizeName(_layer.name)
             if _lname == "0" do _lname = "default"
             _str += "\nSceneLayer " + _lname + " {\n"
-            _str += "  hierarchy=" + getLayerHierarchy _layer + ";\n"
-            _str += "  nodes=" + formatArray( for o in (refs.dependentNodes _layer) collect normalizeName(o.name)) + ";\n"
+            --_str += "  hierarchy=" + getLayerHierarchy _layer + ";\n"
+            _lparent = _layer.getParent()
+            _lpname = ""
+            if _lparent != undefined do _lpname = normalizeName(_lparent.name)
+            if _lpname == "0" do _lpname = "default"
+            _str += "  parent=" + _lpname + ";\n"
+            _str += "  nodes=List(" + formatArray( for o in (refs.dependentNodes _layer) collect normalizeName(o.name)) + ");\n"
             --_str += "  color=" + formatColor _layer.wirecolor + ";\n"
             _str += "}\n"
         )
