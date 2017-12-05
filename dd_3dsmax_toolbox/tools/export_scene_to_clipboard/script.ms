@@ -15,13 +15,20 @@ fn writeToFile _f _str = (
     (dotNetClass "System.IO.File").WriteAllText _f _str
 )
 
-fn getHierarchy _o _opath:"" = (
+fn getObjectHierarchy _o _opath:"" = (
 	_opath = "/" + _o.name + _opath
 	if _o.parent != undefined do
 	(
-		_opath = getHierarchy _o.parent _opath:_opath
+		_opath = getObjectHierarchy _o.parent _opath:_opath
 	)
 	_opath
+)
+
+fn getObjectsHierarchy _list = (
+    _result = ""
+    for _o in _list do _result += (getObjectHierarchy _o) + ","
+    _result = trimRight _result ","
+    _result
 )
 
 fn getListenerCurrentPos = (
@@ -181,129 +188,106 @@ fn deleteLightMesh _o = (
     delete _mesh
 )
 
+fn makeUniqueMaterialAndLayer _list = (
+    _result = #()
+    for _i in _list do (
+        _finded = false
+        for _o in _result do (
+            if _o.material == _i.material and _o.layer == _i.layer do (
+                _finded = true
+                break
+            )
+        )
+        if _finded == false do append _result _i
+	)
+    _result
+)
+
+fn isObjectsAnimatedOrDeformable _list = (
+    _result = false
+    for _o in _list do (
+        if  _o.isAnimated or isDeformable _o do (
+            _result = true
+            break
+        )
+    )
+    _result
+)
+
 fn exportGeometries _dir _step:1 _substeps:1 = (
     _str = ""
-    _validGeometries = getValidGeometries()
+    _valid_geometries = getValidGeometries()
+    _valid_geometries_filtered = makeUniqueMaterialAndLayer _valid_geometries
 
     with redraw off
-    for _o in _validGeometries do (
-        _animated = ( _o.isAnimated or isDeformable _o )
+    for _o in _valid_geometries_filtered do (
+
+        _similar_geometries = for _i in _valid_geometries where _i.material == _o.material and _i.layer == _o.layer collect _i
+
+        _animated = isObjectsAnimatedOrDeformable _similar_geometries
+
         _name = normalizeName _o.name
+
+        if _similar_geometries.count > 1 do (
+            _name += "__group"
+
+            --then create temp node for .vrmesh export
+            _group_header = copy _similar_geometries[1]
+            _group_header.name = _name
+
+            --then temporary hide other nodes for accelerating .vrmesh export
+            for _i in _similar_geometries do (
+                _i.name += "__hidden"
+                _i.isHidden = true
+            )
+        )
+
         _abcfile = _dir + _name + ".abc"
         _frange = [0,100]
-        _opath = getHierarchy _o
-        if _animated == false then _frange = [currenttime.frame, currenttime.frame] else _frange = [animationrange.start.frame, animationrange.end.frame]
 
-        --do a copy / reset transforms
-        _copy = instance _o
-        _copy.name = _o.name + "_copy"
-        _copy.transform.controller.position.controller = Position_XYZ()
-        _copy.transform.controller.rotation.controller = Euler_XYZ()
-        _copy.transform.controller.scale.controller = bezier_scale()
-        _copy.transform = matrix3 1
-        _o = _copy
+        if not _animated then _frange = [currenttime.frame, currenttime.frame] else _frange = [animationrange.start.frame, animationrange.end.frame]
 
-        if classOf _copy != HairObject and classOf _copy != GuidesObject then (
-            _job = "filename=" + _abcfile
-            _job += ";in=" + (_frange[1] as string)
-            _job += ";out=" + (_frange[2] as string)
-            _job += ";step=" + (_step as string)
-            _job += ";substep=" + (_substeps as string)
-            _job += ";purepointcache=false"
-            _job += ";normals=true"
-            _job += ";uvs=true"
-            _job += ";materialids=true"
-            _job += ";exportselected=false"
-            _job += ";objects=" + getHierarchy _copy
-            _job += ";flattenhierarchy=true"
-            _job += ";automaticinstancing=true"
-            _job += ";facesets=partitioningFacesetsOnly"
-            _job += ";transformCache=false"
-            _job += ";validateMeshTopology=false"
-            _job += ";renameConflictingNodes=false"
-            _job += ";mergePolyMeshSubtree=true"
-            _job += ";particlesystemtomeshconversion=true"
-            --_job += ";dynamictopology=true"
-            --_job += ";transformCache=true"
-            _job += ";transformCache=false" --TEST
-            _job += ";storageFormat=hdf5"
+        _job = "filename=" + _abcfile
+        _job += ";in=" + (_frange[1] as string)
+        _job += ";out=" + (_frange[2] as string)
+        _job += ";step=" + (_step as string)
+        _job += ";substep=" + (_substeps as string)
+        _job += ";purepointcache=false"
+        _job += ";normals=true"
+        _job += ";uvs=true"
+        _job += ";materialids=true"
+        _job += ";exportselected=false"
+        _job += ";objects=" + getObjectsHierarchy _similar_geometries
+        _job += ";flattenhierarchy=true"
+        _job += ";automaticinstancing=true"
+        _job += ";facesets=partitioningFacesetsOnly"
+        _job += ";transformCache=true"
+        _job += ";validateMeshTopology=false"
+        _job += ";renameConflictingNodes=false"
+        _job += ";mergePolyMeshSubtree=true"
+        _job += ";particlesystemtomeshconversion=true"
+        _job += ";dynamictopology=true"
+        _job += ";storageFormat=hdf5"
 
-            _result = ExocortexAlembic.createExportJobs( _job )
+        _result = ExocortexAlembic.createExportJobs( _job )
 
-            if( _result != 0 ) do (
-                messageBox "Failure - See Maxscript Listener for details." title:"Exocortex Alembic Export"
-                _abcfile = ""
-            )
-        )else (
-            --https://ephere.com/plugins/autodesk/max/ornatrix/docs/4/Alembic_Export.html#Examples
-            --OxAlembicExport [string filePath] [bool exportSelectedHairs] [int startFrame] [int endFrame] [bool exportRenderVersion] [int upDirection] [int format]
-            try(
-                _result = OxAlembicExport _abcfile true _frange[1] _frange[2]-- false 1 0
-            )catch(_abcfile = "")
+        if( _result != 0 ) do (
+            messageBox "Failure - See Maxscript Listener for details." title:"Exocortex Alembic Export"
+            _abcfile = ""
         )
+
         if _abcfile != "" do
         (
-            _instances = #()
-            _count = InstanceMgr.GetInstances _copy &_instances
-            if _count > 1 do (
-                _instances = for i = _instances.count to 1 by -1 where _instances[i] != _copy collect _instances[i] --reverse array and exlude _copy
-            )
-
-            for _o in _instances do (
-                if classOf _o != HairObject and classOf _o != GuidesObject then
-                    _str += "AlembicGeometry " +  normalizeName _o.name + " {\n"
-                else
-                    _str += "OxAlembicExport " + normalizeName _o.name + " {\n"
-
-                -- object transforms here...
-                _t_t = maxToHoudiniGetTransforms _o _prerotate:false
-                _t_p_x = for i in _t_t collect ( #( i[1], i[2].position.x / 100. ) )
-                _t_p_y = for i in _t_t collect ( #( i[1], i[2].position.y / 100. ) )
-                _t_p_z = for i in _t_t collect ( #( i[1], i[2].position.z / 100. ) )
-
-                _t_r_x = for i in _t_t collect ( #( i[1], ( i[2].rotation as eulerangles ).x ) )
-                _t_r_y = for i in _t_t collect ( #( i[1], ( i[2].rotation as eulerangles ).y ) )
-                _t_r_z = for i in _t_t collect ( #( i[1], ( i[2].rotation as eulerangles ).z ) )
-
-                _t_s_x = for i in _t_t collect ( #( i[1], i[2].scale.x ) )
-                _t_s_y = for i in _t_t collect ( #( i[1], i[2].scale.y ) )
-                _t_s_z = for i in _t_t collect ( #( i[1], i[2].scale.z ) )
-
-                _str += "  tx=" + formatTuple _t_p_x  + ";\n"
-                _str += "  ty=" + formatTuple _t_p_y  + ";\n"
-                _str += "  tz=" + formatTuple _t_p_z  + ";\n"
-
-                _str += "  rx=" + formatTuple _t_r_x  + ";\n"
-                _str += "  ry=" + formatTuple _t_r_y  + ";\n"
-                _str += "  rz=" + formatTuple _t_r_z  + ";\n"
-
-                _str += "  sx=" + formatTuple _t_s_x  + ";\n"
-                _str += "  sy=" + formatTuple _t_s_y  + ";\n"
-                _str += "  sz=" + formatTuple _t_s_z  + ";\n"
-
-
-                _str += "  filename=\"" + _abcfile + "\";\n"
-                _str += "  object_id=" + _o.gbufferChannel  as string + ";\n"
-                _str += "  wirecolor=Color(" + ( _o.wirecolor.r / 255. ) as string + "," + ( _o.wirecolor.g/ 255. ) as string + "," + ( _o.wirecolor.b / 255. ) as string + ");\n"
-                _str += "  handle=" + _o.inode.handle as string + ";\n"
-                --user properties here...
-                /*for _line in (FilterString (getUserPropBuffer _o) "\n") do
-                (
-                    _prop_str = substituteString (trimLeft (trimRight _line)) " = " "="
-                    _prop_split = FilterString _prop_str "="
-                    _prop_name = substituteString (toLower _prop_split[1]) "vray_" ""
-                    _prop_val = substituteString (substituteString _prop_split[2] "[" "Color(") "]" ")"
-                    _str += "  " + _prop_name + "=" + _prop_val + ";\n"
-                )*/
-                _str += "}\n\n"
-            )
-
-            --delete the copy
-            delete _copy
+            _str += "AlembicGeometry " +  _name + " {\n"
+            _str += "  filename=\"" + _abcfile + "\";\n"
+            _str += "  object_id=" + _o.gbufferChannel  as string + ";\n"
+            _str += "  wirecolor=Color(" + ( _o.wirecolor.r / 255. ) as string + "," + ( _o.wirecolor.g/ 255. ) as string + "," + ( _o.wirecolor.b / 255. ) as string + ");\n"
+            _str += "  handle=" + _o.inode.handle as string + ";\n"
+            _str += "}\n\n"
         )
     )
 
-    clearListener()
+    --clearListener()
 	_str
 )
 
@@ -1669,7 +1653,7 @@ fn exportCustomSettings = (
             if _lparent != undefined do _lpname = normalizeName(_lparent.name)
             if _lpname == "0" do _lpname = "default"
             _str += "  parent=" + _lpname + ";\n"
-            _str += "  nodes=List(" + formatArray( for o in (refs.dependentNodes _layer) collect normalizeName(o.name)) + ");\n"
+            _str += "  nodes=List(" + formatArray(for _o in (refs.dependentNodes _layer) where _o.isHidden == false and _o.renderable == true collect normalizeName(_o.name)) + ");\n"
             --_str += "  color=" + formatColor _layer.wirecolor + ";\n"
             _str += "}\n"
         )
@@ -1698,13 +1682,18 @@ fn exportScene = (
 
     _script = "#scene_export\n\n"
 
-    _vrlightsmeshs = for _o in getClassInstances VRayLight where _o.type == 3 collect (refs.dependentNodes _o)[1]
+    _vray_light_meshs = for _o in getClassInstances VRayLight where _o.type == 3 collect (refs.dependentNodes _o)[1]
 
     try(
         suspendEditing()
-        for _o in _vrlightsmeshs do extractLightMesh _o
+        for _o in _vray_light_meshs do extractLightMesh _o
         resumeEditing()
     )catch(resumeEditing();print "error while creating temporary light mesh objects")
+
+    writeToFile ( _filename + "_geometries.vrscene" ) (exportGeometries _dir)
+    writeToFile ( _filename + "_cameras.vrscene" ) (exportCameras())
+    writeToFile ( _filename + "_settings.vrscene" ) (exportCustomSettings())
+    --writeToFile ( _filename + "_lights.vrscene" ) (exportLights())
 
     try(
         enabledVRActiveShade = ((renderers.activeShade.classid[1] == 1770671000) and (renderers.activeShade.classid[2] == 1323107829))
@@ -1712,20 +1701,24 @@ fn exportScene = (
 
         suspendEditing()
 
-            for _o in geometry do (
-                addModifier _o (DeleteMesh name:"_delete_mesh_tmp")
-                for _id in getUsedUVChannels _o do (
-                    addModifier _o (UVW_Mapping_Clear mapID:_id name:"_delete_uv_tmp")
-                )
-            )
+        _valid_geometries = getValidGeometries()
 
-            vrayExportRTScene ( _filename + ".vrscene" ) exportCompressed:false exportHEXFormatMesh:false exportHEXFormatTransf:false separateFiles:true exportView:false exportLights:true exportGeometry:true exportNodes:true exportMaterials:true exportTextures:true exportBitmaps:true prefix:"" stripPaths:false
-            for _o in geometry do (
-                for i = _o.modifiers.count to 1 by -1 do (
-                    _m = _o.modifiers[i]
-                    if _m.name == "_delete_mesh_tmp" or _m.name == "_delete_uv_tmp" do deleteModifier _o _m
-                )
+        for _o in _valid_geometries do (
+            addModifier _o (DeleteMesh name:"_delete_mesh_tmp")
+            for _id in getUsedUVChannels _o do (
+                addModifier _o (UVW_Mapping_Clear mapID:_id name:"_delete_uv_tmp")
             )
+        )
+
+        vrayExportRTScene ( _filename + ".vrscene" ) exportCompressed:false exportHEXFormatMesh:false exportHEXFormatTransf:false separateFiles:true exportView:false exportLights:true exportGeometry:true exportNodes:true exportMaterials:true exportTextures:true exportBitmaps:true prefix:"" stripPaths:false
+
+        for _o in _valid_geometries do (
+            for i = _o.modifiers.count to 1 by -1 do (
+                _m = _o.modifiers[i]
+                if _m.name == "_delete_mesh_tmp" or _m.name == "_delete_uv_tmp" do deleteModifier _o _m
+            )
+        )
+
         resumeEditing()
 
     )catch(resumeEditing();print "error while creating .vrscene file...")
@@ -1738,16 +1731,27 @@ fn exportScene = (
         appendLineToFile ( _filename + ".vrscene" ) "#include \"%\"\n" (_filename + "_settings.vrscene")
     )catch(print "cannot append lines to .vrscene file...")
 
-    writeToFile ( _filename + "_settings.vrscene" ) (exportCustomSettings())
-    writeToFile ( _filename + "_geometries.vrscene" ) (exportGeometries _dir)
-    writeToFile ( _filename + "_cameras.vrscene" ) (exportCameras())
-    --writeToFile ( _filename + "_lights.vrscene" ) (exportLights())
+    try(
+        suspendEditing()
+        for _o in _vray_light_meshs do deleteLightMesh _o
+        resumeEditing()
+    )catch(resumeEditing();print "error while deleting temporary light mesh objects")
+
 
     try(
         suspendEditing()
-        for _o in _vrlightsmeshs do deleteLightMesh _o
+        for _o in geometry do if findString _o.name "__group" != undefined do delete _o
         resumeEditing()
-    )catch(resumeEditing();print "error while deleting temporary light mesh objects")
+    )catch(resumeEditing();print "error while deleting temporary group objects")
+
+    try(
+        suspendEditing()
+        for _o in geometry do if findString _o.name "__hidden" != undefined do (
+            _o.isHidden = false
+            _o.name = trimRight _o.name "__hidden"
+        )
+        resumeEditing()
+    )catch(resumeEditing();print "cannot unhide objects...")
 
     _script += "filename," + _filename + ".vrscene" + "\n"
 
