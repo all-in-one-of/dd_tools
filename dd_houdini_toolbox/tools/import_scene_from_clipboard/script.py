@@ -1726,12 +1726,12 @@ class import_scene_from_clipboard():
                             if node != None:
                                 node.setInput(0, layer)
 
-        # delete empty layers
+        ''''# delete empty layers
         for l in layers:
             layer = obj.node(self.normalize_name(l['Name']))
             if layer != None:
                 if len(layer.outputs()) == 0:
-                    layer.destroy()
+                    layer.destroy()'''
 
         obj.layoutChildren()
 
