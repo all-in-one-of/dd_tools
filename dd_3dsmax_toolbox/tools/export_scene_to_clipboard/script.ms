@@ -143,7 +143,7 @@ fn formatUnits _value = (
     ( _value / 100.0 ) as string
 )
 
-fn getValidGeometries = (
+/*fn getValidGeometries = (
     _prefilteredObjects = for _o in geometry where _o.isHidden == false and _o.renderable == true collect _o
     _instanceslist = #()
     _filteredOjects = #()
@@ -154,6 +154,11 @@ fn getValidGeometries = (
         for _i in _instances do appendifunique _instanceslist _i
     )
     _filteredOjects
+)*/
+
+fn getValidGeometries = (
+
+    for _o in geometry where _o.isHidden == false and _o.renderable == true collect _o
 )
 
 fn extractLightMesh _o = (
@@ -261,10 +266,10 @@ fn exportGeometries _dir _step:1 _substeps:1 = (
         _job += ";flattenhierarchy=true"
         _job += ";automaticinstancing=true"
         _job += ";facesets=partitioningFacesetsOnly"
-        _job += ";transformCache=true"
+        _job += ";transformCache=false" --TEST
         _job += ";validateMeshTopology=false"
         _job += ";renameConflictingNodes=false"
-        _job += ";mergePolyMeshSubtree=true"
+        _job += ";mergePolyMeshSubtree=false" --TEST
         _job += ";particlesystemtomeshconversion=true"
         _job += ";dynamictopology=true"
         _job += ";storageFormat=hdf5"
