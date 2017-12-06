@@ -143,19 +143,6 @@ fn formatUnits _value = (
     ( _value / 100.0 ) as string
 )
 
-/*fn getValidGeometries = (
-    _prefilteredObjects = for _o in geometry where _o.isHidden == false and _o.renderable == true collect _o
-    _instanceslist = #()
-    _filteredOjects = #()
-    for _o in _prefilteredObjects do
-    (
-        if findItem _instanceslist _o == 0 do append _filteredOjects _o
-        InstanceMgr.GetInstances _o &_instances
-        for _i in _instances do appendifunique _instanceslist _i
-    )
-    _filteredOjects
-)*/
-
 fn getValidGeometries = (
 
     for _o in geometry where _o.isHidden == false and _o.renderable == true collect _o
@@ -1630,7 +1617,7 @@ fn getLayers = (
 	fn getLayerChidren _layer _nodes_cnt:0 = (
 		_nodes_cnt += (for _o in (refs.dependentNodes _layer) where _o.isHidden == false and _o.renderable == true collect _o).count
 		if _layer.getNumChildren() > 0 do
-		for _i=1 to (_layer.getNumChildren()) do getLayerChidren (_layer.getChild _i).layerAsRefTarg _nodes_cnt:_nodes_cnt
+		for _i=1 to (_layer.getNumChildren()) do _nodes_cnt += getLayerChidren (_layer.getChild _i).layerAsRefTarg _nodes_cnt:_nodes_cnt
 		_nodes_cnt
 	)
 
