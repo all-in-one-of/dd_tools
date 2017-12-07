@@ -1612,20 +1612,21 @@ fn formatArray _array = (
 	_result
 )
 
+fn getLayerChidren _layer _nodes_cnt:0 = (
+    --recursive fn
+    _nodes_cnt += (for _o in (refs.dependentNodes _layer) where _o.isHidden == false and _o.renderable == true collect _o).count
+    if _layer.getNumChildren() > 0 do
+    for _i=1 to (_layer.getNumChildren()) do _nodes_cnt += getLayerChidren (_layer.getChild _i).layerAsRefTarg _nodes_cnt:_nodes_cnt
+    _nodes_cnt
+)
+
 fn getLayers = (
-	--recursive fn
-	fn getLayerChidren _layer _nodes_cnt:0 = (
-		_nodes_cnt += (for _o in (refs.dependentNodes _layer) where _o.isHidden == false and _o.renderable == true collect _o).count
-		if _layer.getNumChildren() > 0 do
-		for _i=1 to (_layer.getNumChildren()) do _nodes_cnt += getLayerChidren (_layer.getChild _i).layerAsRefTarg _nodes_cnt:_nodes_cnt
-		_nodes_cnt
-	)
 
 	--get all layers
 	_layers = for _i = 0 to (LayerManager.count-1)  collect ILayerManager.getLayerObject _i
 
 	--filter layers by node count, keep only layers with visible and rendered children (recursive)
-	_layers = for _layer in _layers where (getLayerChidren _layer _nodes_cnt:0) != 0 collect _layer
+	_layers = for _layer in _layers where (getLayerChidren _layer) != 0 collect _layer
 	_layers
 )
 
