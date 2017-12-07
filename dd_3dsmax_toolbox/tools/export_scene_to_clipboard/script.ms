@@ -1711,11 +1711,13 @@ fn exportScene = (
 
         _valid_geometries = getValidGeometries()
 
+        _substitute_mesh = mesh name:"tmp_mesh" numverts:0 numfaces:0
         for _o in _valid_geometries do (
-            addModifier _o (DeleteMesh name:"_delete_mesh_tmp")
+            /*addModifier _o (DeleteMesh name:"_delete_mesh_tmp")
             for _id in getUsedUVChannels _o do (
                 addModifier _o (UVW_Mapping_Clear mapID:_id name:"_delete_uv_tmp")
-            )
+            )*/
+            addModifier _o (Substitute name:"_substitute_mesh_tmp" ObjectReference:_substitute_mesh RetainPosition:false RetainLocalRotation:false)
         )
 
         vrayExportRTScene ( _filename + ".vrscene" ) exportCompressed:false exportHEXFormatMesh:false exportHEXFormatTransf:false separateFiles:true exportView:false exportLights:true exportGeometry:true exportNodes:true exportMaterials:true exportTextures:true exportBitmaps:true prefix:"" stripPaths:false
@@ -1723,9 +1725,12 @@ fn exportScene = (
         for _o in _valid_geometries do (
             for i = _o.modifiers.count to 1 by -1 do (
                 _m = _o.modifiers[i]
-                if _m.name == "_delete_mesh_tmp" or _m.name == "_delete_uv_tmp" do deleteModifier _o _m
+                --if _m.name == "_delete_mesh_tmp" or _m.name == "_delete_uv_tmp" do deleteModifier _o _m
+                if _m.name == "_substitute_mesh_tmp" do deleteModifier _o _m
             )
         )
+
+        delete _substitute_mesh
 
         resumeEditing()
 
