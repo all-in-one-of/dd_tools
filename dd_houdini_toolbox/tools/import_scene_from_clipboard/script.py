@@ -320,11 +320,11 @@ class import_scene_from_clipboard():
                 result = eval(parm_val)
 
                 if (type, parm_name) in self.metric_parms:
-                    result /= 100
+                    result *= 0.01
 
                 if (type, parm_name) in self.deg_to_rad_parms:
                     import math
-                    result /= math.radians(result)
+                    result = math.radians(result)
 
         except:
             if not '@' in str(parm_val) and not 'bitmapBuffer' in str(parm_val):
