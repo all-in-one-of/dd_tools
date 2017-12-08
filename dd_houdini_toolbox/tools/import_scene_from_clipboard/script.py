@@ -715,7 +715,7 @@ class import_scene_from_clipboard():
 
                     if l['Type'] == 'LightRectangle':
                         if parm_name == 'u_size' or parm_name == 'v_size':
-                            parm_val *= 2
+                            parm_val *= 2 #TEST !!!!
                         elif parm_name == 'is_disc':
                             if parm_val == 1:
                                 self.try_set_parm(light, 'v_size', light.parm('u_size').eval(), message_stack)
@@ -1021,6 +1021,7 @@ class import_scene_from_clipboard():
                         alembic = geo.createNode('alembic')
                     alembic.parm('fileName').set('$HIP/geo/' + basename(from_filename))  # + ".abc")
                     alembic.parm('reload').pressButton()
+                    alembic.parm('groupnames').set(4)
 
                     xform = geo.node('xform1')
                     if xform == None:

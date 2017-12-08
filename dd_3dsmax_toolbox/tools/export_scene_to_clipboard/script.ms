@@ -221,7 +221,7 @@ fn exportGeometries _dir _step:1 _substeps:1 = (
         _name = normalizeName _o.name
 
         if _similar_geometries.count > 1 do (
-            _name += "__group"
+            _name = uniqueName "__group__" numDigits:0
 
             --then create temp node for .vrmesh export
             _group_header = copy _similar_geometries[1]
@@ -231,8 +231,9 @@ fn exportGeometries _dir _step:1 _substeps:1 = (
 
             --then temporary hide other nodes for accelerating .vrmesh export
             for _i in _similar_geometries do (
-                _i.name += "__hidden"
+                --_i.name += "__hidden"
                 _i.isHidden = true
+                setAppData _i 65535 "1"
             )
         )
 
@@ -1756,15 +1757,18 @@ fn exportScene = (
 
     try(
         suspendEditing()
-        for _o in geometry do if findString _o.name "__group" != undefined do delete _o
+        for _o in geometry do if findString _o.name "__group__" != undefined do delete _o
         resumeEditing()
     )catch(resumeEditing();print "error while deleting temporary group objects")
 
     try(
         suspendEditing()
-        for _o in geometry do if findString _o.name "__hidden" != undefined do (
+        --for _o in geometry do if findString _o.name "__hidden" != undefined do (
+        for _o in geometry do if getAppData _o 65535 == "1" do (
             _o.isHidden = false
-            _o.name = trimRight _o.name "__hidden"
+            --_o.name = trimRight _o.name "__hidden"
+            deleteAppData _o 65535
+            deleteUserProp
         )
         resumeEditing()
     )catch(resumeEditing();print "cannot unhide objects...")
