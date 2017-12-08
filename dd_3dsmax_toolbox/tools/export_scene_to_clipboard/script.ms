@@ -226,6 +226,8 @@ fn exportGeometries _dir _step:1 _substeps:1 = (
             --then create temp node for .vrmesh export
             _group_header = copy _similar_geometries[1]
             _group_header.name = _name
+            _layer = _similar_geometries[1].layer.layerAsRefTarg
+            _layer.addNode(_group_header)
 
             --then temporary hide other nodes for accelerating .vrmesh export
             for _i in _similar_geometries do (
