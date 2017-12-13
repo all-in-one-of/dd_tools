@@ -36,7 +36,7 @@ class import_scene_from_clipboard():
                     ('RenderChannelZDepth', 'depth_black'), ('Mtl2Sided', 'translucency_tex_mult'),
                     ('TexFalloff', 'dist_near'), ('TexFalloff', 'dist_far'),
                     ('RenderChannelZDepth', 'depth_white'),
-                    ('TexEdges', 'world_width'))  # parameters that need to be scaled
+                    ('TexEdges', 'world_width'), ('BRDFVRayMtl', 'translucency_thickness'))  # parameters that need to be scaled
 
     deg_to_rad_parms = (('LightSpotMax', 'fallsize'), ('LightSpotMax', 'hotspot'))
 
