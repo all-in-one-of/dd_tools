@@ -154,7 +154,9 @@ fn extractLightMesh _o = (
 	if _o.type == 3 do (
 		if _o.mesh_source == undefined then (
 			_lightMesh = _o.Shape_mesh
-			_result = editable_mesh name:(_o.name + "___mesh___")
+			--_result = editable_mesh name:(_o.name + "___mesh___")
+			_result = mesh mesh:_lightMesh.mesh name:(_o.name + "___mesh___")
+			_result.update()
 			try (
 				_result.baseObject = _lightMesh[_lightMesh.numSubs]
 			)catch(
@@ -180,12 +182,12 @@ fn deleteLightMesh _o = (
     delete _mesh
 )
 
-fn makeUniqueMaterialAndLayer _list = (
+fn groupSimilarObjects _list = (
     _result = #()
     for _i in _list do (
         _finded = false
         for _o in _result do (
-            if _o.material == _i.material and _o.layer == _i.layer do (
+            if _o.material == _i.material and _o.layer == _i.layer and _o.wirecolor == _i.wirecolor and _o.wirecolor == _i.wirecolor and _o.gbufferChannel == _i.gbufferChannel do (
                 _finded = true
                 break
             )
@@ -209,12 +211,12 @@ fn isObjectsAnimatedOrDeformable _list = (
 fn exportGeometries _dir _step:1 _substeps:1 = (
     _str = ""
     _valid_geometries = getValidGeometries()
-    _valid_geometries_filtered = makeUniqueMaterialAndLayer _valid_geometries
+    _valid_geometries_filtered = groupSimilarObjects _valid_geometries
 
     with redraw off
     for _o in _valid_geometries_filtered do (
 
-        _similar_geometries = for _i in _valid_geometries where _i.material == _o.material and _i.layer == _o.layer collect _i
+        _similar_geometries = for _i in _valid_geometries where _i.material == _o.material and _i.layer == _o.layer  and _i.wirecolor == _o.wirecolor and _i.wirecolor == _o.wirecolor and _i.gbufferChannel == _o.gbufferChannel collect _i
 
         _animated = isObjectsAnimatedOrDeformable _similar_geometries
 
@@ -1761,6 +1763,14 @@ fn exportScene = (
         resumeEditing()
     )catch(resumeEditing();print "error while deleting temporary group objects")
 
+	
+	try(
+        suspendEditing()
+        for _o in geometry do if findString _o.name "___mesh___" != undefined do delete _o
+        resumeEditing()
+    )catch(resumeEditing();print "error while deleting light mesh objects")
+	
+	
     try(
         suspendEditing()
         --for _o in geometry do if findString _o.name "__hidden" != undefined do (

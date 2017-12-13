@@ -1,3 +1,6 @@
+# bypass 'VRayNodeTexCombineColor'
+# bypass 'VRayNodeTexCombineFloat'
+
 import hou
 
 try:
@@ -934,6 +937,8 @@ class import_scene_from_clipboard():
 
         # geo_dir = hou.expandString('$HIP') + '/geo/'
         geo_dir = hou.getenv('HIP') + '/geo/'
+        if not os.path.exists(geo_dir):
+            os.makedirs(geo_dir)
 
         print '\n\n\n#############################################'
         print '###########  LOADING SCENE NODES  ###########'
@@ -1006,7 +1011,7 @@ class import_scene_from_clipboard():
                             self.try_set_parm(geo, parm_name, parm_val, message_stack)
 
                     # copy cache file from temp location to .hip/geo dir
-                    if os.path.isfile(from_filename):
+                    if os.path.isfile(from_filename):					
                         to_filename = geo_dir + basename(from_filename)  # + ".abc"
                         try:
                             # shutil.move(from_filename, to_filename)
@@ -1165,7 +1170,7 @@ class import_scene_from_clipboard():
         print '\n\n( ' + self.normalize_name(node_name) + ' )'
 
         if node != None:
-
+		
             self.try_set_input(output_node, input_name, node, message_stack, output_name)
 
             for p in node_parms:
@@ -1568,6 +1573,10 @@ class import_scene_from_clipboard():
                     print parm_name + " = " + str(parm_val)
                     self.try_set_parm(node, parm_name, parm_val, message_stack)
 
+            if node_type == 'TexCombineColor' or node_type == 'TexCombineFloat':
+                #node.bypass(1)
+                node.destroy() #TEMP !!!!!
+				
     def load_materials(self, plugins, materials):
         # loading materials
         message_stack = list()
