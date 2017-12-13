@@ -273,7 +273,7 @@ class Toolbox(maxparenting.MaxWidget):
         #connect refresh button
         #self.button.clicked.connect(self.update)
 
-global window
+
 
 '''try:
     window.close()
@@ -281,6 +281,10 @@ global window
 except:
     pass'''
 
-if window == None:
+try:
+    window
+except:
+    global window
     window = Toolbox()
+
 window.show()

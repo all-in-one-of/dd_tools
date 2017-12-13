@@ -268,7 +268,7 @@ class Toolbox(QtWidgets.QWidget):
         #self.button.clicked.connect(self.update)
 
 def run():
-    global window
+
 
     '''try:
         window.close()
@@ -276,7 +276,10 @@ def run():
     except:
         pass'''
 
-    if window == None:
+    try:
+        window
+    except:
+        global window
         window = Toolbox()
         window.setParent(hou.qt.mainWindow(), QtCore.Qt.Window)
     window.show()
