@@ -268,6 +268,17 @@ class Toolbox(QtWidgets.QWidget):
         #self.button.clicked.connect(self.update)
 
 def run():
-    window = Toolbox()
-    window.setParent(hou.qt.mainWindow(), QtCore.Qt.Window)
+    global window
+
+    '''try:
+        window.close()
+        window.destroy()
+    except:
+        pass'''
+
+    if window == None:
+        window = Toolbox()
+        window.setParent(hou.qt.mainWindow(), QtCore.Qt.Window)
     window.show()
+
+

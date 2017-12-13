@@ -8,7 +8,7 @@ import maxparenting
 reload(maxparenting)
 
 try:
-	from PySide import QtCore, QtGui
+    from PySide import QtCore, QtGui
 except ImportError:
     from Qt import QtCore, QtGui
 
@@ -206,7 +206,7 @@ class Toolbox(maxparenting.MaxWidget):
                 attachAction.triggered.connect(self.duplicate)
                 attachAction = menu.addAction("Delete")
                 attachAction.triggered.connect(self.delete)
-				
+
             parentPosition = self.listWidget.mapToGlobal(QtCore.QPoint(0, 0))
             menu.move(parentPosition + QPos)
             menu.show()
@@ -240,14 +240,14 @@ class Toolbox(maxparenting.MaxWidget):
         except:
             pass
         self.update()
-		
+
     def setHidden(self):
         item = self.listWidget.currentItem()
         hidden_file = self.path + item.data(QtCore.Qt.UserRole) + '\\hidden'
         f = open(hidden_file, 'w')
         f.close()
         self.update()
-		
+
     def nameChanged(self, item):
         item.setText(item.text().title().replace("_", " "))
         oldname = item.data(QtCore.Qt.UserRole).replace(" ", "_").lower()
@@ -273,12 +273,14 @@ class Toolbox(maxparenting.MaxWidget):
         #connect refresh button
         #self.button.clicked.connect(self.update)
 
-'''
-def run():
-    window = Toolbox()
-    window.setParent(hou.qt.mainWindow(), QtCore.Qt.Window)
-    window.show()
-'''
-
 global window
-window = Toolbox()
+
+'''try:
+    window.close()
+    window.destroy()
+except:
+    pass'''
+
+if window == None:
+    window = Toolbox()
+window.show()
